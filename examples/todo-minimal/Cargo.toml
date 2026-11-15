@@ -1,0 +1,20 @@
+[package]
+name = "todo-minimal"
+description = "The smallest useful nestrs application: one file, no layering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+nestrs.workspace = true
+serde.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+nestrs-testing.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

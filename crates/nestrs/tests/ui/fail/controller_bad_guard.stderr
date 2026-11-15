@@ -1,0 +1,45 @@
+error[E0277]: the trait bound `NotAGuard: Guard` is not satisfied
+  --> tests/ui/fail/controller_bad_guard.rs:11:13
+   |
+11 |     #[guard(NotAGuard)]
+   |             ^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Guard` is not implemented for `NotAGuard`
+  --> tests/ui/fail/controller_bad_guard.rs:3:1
+   |
+ 3 | struct NotAGuard;
+   | ^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Guard`
+  --> $WORKSPACE/crates/nestrs-http/src/bearer.rs
+   |
+   | impl Guard for BearerAuth {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ `BearerAuth`
+...
+   | impl Guard for OptionalBearerAuth {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `OptionalBearerAuth`
+
+error[E0277]: the trait bound `NotAGuard: Guard` is not satisfied
+ --> tests/ui/fail/controller_bad_guard.rs:8:1
+  |
+8 | #[controller("/c")]
+  | ^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `Guard` is not implemented for `NotAGuard`
+ --> tests/ui/fail/controller_bad_guard.rs:3:1
+  |
+3 | struct NotAGuard;
+  | ^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Guard`
+ --> $WORKSPACE/crates/nestrs-http/src/bearer.rs
+  |
+  | impl Guard for BearerAuth {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ `BearerAuth`
+...
+  | impl Guard for OptionalBearerAuth {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `OptionalBearerAuth`
+note: required by a bound in `guarded`
+ --> $WORKSPACE/crates/nestrs-http/src/guard.rs
+  |
+  | pub fn guarded<G: Guard>(route: MethodRouter, guard: Arc<G>) -> MethodRouter {
+  |                   ^^^^^ required by this bound in `guarded`
+  = note: this error originates in the attribute macro `controller` (in Nightly builds, run with -Z macro-backtrace for more info)

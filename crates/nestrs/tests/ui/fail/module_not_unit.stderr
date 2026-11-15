@@ -1,0 +1,7 @@
+error: #[module] must be applied to a non-generic unit struct (`pub struct MyModule;`)
+ --> tests/ui/fail/module_not_unit.rs:4:1
+  |
+4 | / struct M {
+5 | |     field: u8,
+6 | | }
+  | |_^

@@ -1,0 +1,5 @@
+error: lifecycle methods must be `async fn`
+ --> tests/ui/fail/lifecycle_sync_method.rs:8:5
+  |
+8 |     fn connect(&self) -> Result<(), String> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

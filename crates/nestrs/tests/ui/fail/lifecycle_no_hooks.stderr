@@ -1,0 +1,5 @@
+error: #[lifecycle] needs at least one `#[on_init]` or `#[on_destroy]` method
+ --> tests/ui/fail/lifecycle_no_hooks.rs:6:6
+  |
+6 | impl Pool {
+  |      ^^^^

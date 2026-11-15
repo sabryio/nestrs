@@ -1,0 +1,5 @@
+error: route handlers must be `async fn`
+ --> tests/ui/fail/controller_sync_handler.rs:9:5
+  |
+9 |     fn handler(&self) {}
+  |     ^^

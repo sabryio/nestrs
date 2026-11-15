@@ -1,0 +1,5 @@
+error: #[provider] functions must return the value they provide
+ --> tests/ui/fail/provider_no_return.rs:4:1
+  |
+4 | async fn nothing() {}
+  | ^^^^^^^^^^^^^^^^^^

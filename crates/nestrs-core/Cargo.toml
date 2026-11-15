@@ -1,0 +1,17 @@
+[package]
+name = "nestrs-core"
+description = "Transport-agnostic dependency-injection container and module graph for nestrs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

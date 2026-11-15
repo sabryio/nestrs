@@ -1,0 +1,5 @@
+error: #[interceptor] on a method that has no #[get]/#[post]/#[put]/#[patch]/#[delete]
+  --> tests/ui/fail/controller_orphan_interceptor.rs:24:19
+   |
+24 |     #[interceptor(Timing)]
+   |                   ^^^^^^

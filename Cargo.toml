@@ -1,0 +1,68 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/nestrs-cache",
+    "crates/nestrs-core",
+    "crates/nestrs-macros",
+    "crates/nestrs-http",
+    "crates/nestrs-bench",
+    "crates/nestrs-cli",
+    "crates/nestrs-config",
+    "crates/nestrs-health",
+    "crates/nestrs-interceptors",
+    "crates/nestrs-jobs",
+    "crates/nestrs-jwt",
+    "crates/nestrs-kit",
+    "crates/nestrs-redis",
+    "crates/nestrs-testing",
+    "crates/nestrs",
+    "examples/blog-api",
+    "examples/todo-minimal",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+repository = "https://github.com/sabry-awad97/nestrs"
+
+[workspace.dependencies]
+# Internal crates
+nestrs-cache = { path = "crates/nestrs-cache", version = "0.1.0" }
+nestrs-core = { path = "crates/nestrs-core", version = "0.1.0" }
+nestrs-macros = { path = "crates/nestrs-macros", version = "0.1.0" }
+nestrs-http = { path = "crates/nestrs-http", version = "0.1.0" }
+nestrs-testing = { path = "crates/nestrs-testing", version = "0.1.0" }
+nestrs-config = { path = "crates/nestrs-config", version = "0.1.0" }
+nestrs-health = { path = "crates/nestrs-health", version = "0.1.0" }
+nestrs-interceptors = { path = "crates/nestrs-interceptors", version = "0.1.0" }
+nestrs-jobs = { path = "crates/nestrs-jobs", version = "0.1.0" }
+nestrs-jwt = { path = "crates/nestrs-jwt", version = "0.1.0" }
+nestrs-redis = { path = "crates/nestrs-redis", version = "0.1.0" }
+nestrs-kit = { path = "crates/nestrs-kit", version = "0.1.0" }
+nestrs = { path = "crates/nestrs", version = "0.1.0" }
+
+# External crates
+axum = "0.8"
+http-body-util = "0.1"
+proc-macro2 = "1"
+quote = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+syn = { version = "3", features = ["full", "extra-traits"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+utoipa = { version = "5", features = ["uuid"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+validator = { version = "0.21", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[profile.dev]
+debug = "line-tables-only"

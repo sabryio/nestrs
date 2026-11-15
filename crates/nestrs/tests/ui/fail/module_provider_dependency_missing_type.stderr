@@ -1,0 +1,19 @@
+error[E0277]: `Settings` cannot be injected
+ --> tests/ui/fail/module_provider_dependency_missing_type.rs:6:21
+  |
+6 | fn banner(settings: Settings) -> String {
+  |                     ^^^^^^^^ not an injectable handle
+  |
+help: the trait `Dependency` is not implemented for `Settings`
+ --> tests/ui/fail/module_provider_dependency_missing_type.rs:3:1
+  |
+3 | struct Settings;
+  | ^^^^^^^^^^^^^^^
+  = note: inject `Arc<T>` (or a port alias such as `UserRepositoryPort`); mark non-injected fields with `#[inject(default)]`
+help: the trait `Dependency` is implemented for `Arc<T>`
+ --> $WORKSPACE/crates/nestrs-core/src/dependency.rs
+  |
+  | / impl<T> Dependency for Arc<T>
+  | | where
+  | |     T: ?Sized + Send + Sync + 'static,
+  | |______________________________________^

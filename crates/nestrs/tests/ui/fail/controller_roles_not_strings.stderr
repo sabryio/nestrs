@@ -1,0 +1,5 @@
+error: expected string literals, e.g. `#[roles("admin", "editor")]`
+ --> tests/ui/fail/controller_roles_not_strings.rs:9:19
+  |
+9 |     #[permissions(posts_delete)]
+  |                   ^^^^^^^^^^^^

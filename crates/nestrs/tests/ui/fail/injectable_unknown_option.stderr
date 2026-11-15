@@ -1,0 +1,5 @@
+error: unknown option; the only supported form is `#[inject(default)]`
+ --> tests/ui/fail/injectable_unknown_option.rs:5:14
+  |
+5 |     #[inject(lazy)]
+  |              ^^^^

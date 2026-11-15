@@ -1,0 +1,5 @@
+error: unknown key `provider`; expected imports, providers, controllers, exports or global
+ --> tests/ui/fail/module_unknown_key.rs:3:10
+  |
+3 | #[module(provider = [])]
+  |          ^^^^^^^^

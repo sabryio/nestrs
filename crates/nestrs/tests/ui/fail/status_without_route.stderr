@@ -1,0 +1,5 @@
+error: #[status] on a method that has no #[get]/#[post]/#[put]/#[patch]/#[delete]
+  --> tests/ui/fail/status_without_route.rs:13:14
+   |
+13 |     #[status(201)]
+   |              ^^^

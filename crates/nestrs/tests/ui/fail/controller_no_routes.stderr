@@ -1,0 +1,5 @@
+error: #[controller] found no routes; annotate methods with #[get], #[post], #[put], #[patch] or #[delete]
+ --> tests/ui/fail/controller_no_routes.rs:7:6
+  |
+7 | impl C {
+  |      ^

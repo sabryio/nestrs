@@ -1,0 +1,5 @@
+error: list at least one role or permission; an empty requirement would allow nobody
+ --> tests/ui/fail/controller_empty_roles.rs:9:5
+  |
+9 |     #[roles()]
+  |     ^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: `contributes` cannot be combined with `provides` or a non-singleton `scope`
+ --> tests/ui/fail/injectable_contributes_and_provides.rs:5:54
+  |
+5 | #[injectable(provides = Arc<dyn Port>, contributes = Arc<dyn Port>)]
+  |                                                      ^^^^^^^^^^^^^

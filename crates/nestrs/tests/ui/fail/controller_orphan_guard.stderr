@@ -1,0 +1,5 @@
+error: #[guard] on a method that has no #[get]/#[post]/#[put]/#[patch]/#[delete]
+  --> tests/ui/fail/controller_orphan_guard.rs:17:13
+   |
+17 |     #[guard(G)]
+   |             ^

@@ -1,0 +1,5 @@
+error: #[response] documents error responses and must be 4xx or 5xx; use #[status] for the success status
+ --> tests/ui/fail/response_not_error.rs:9:16
+  |
+9 |     #[response(201, "Created")]
+  |                ^^^

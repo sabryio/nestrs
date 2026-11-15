@@ -1,0 +1,36 @@
+{
+  "name": "react-orpc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "React + oRPC (contract-first, OpenAPI link) + TanStack Query against the nestrs blog-api, with typed Server-Sent Events.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen": "tsx scripts/generate-contract.ts --from-server",
+    "check:contract": "tsx scripts/generate-contract.ts --check"
+  },
+  "dependencies": {
+    "@orpc/client": "2.0.0-beta.50",
+    "@orpc/contract": "2.0.0-beta.50",
+    "@orpc/openapi": "2.0.0-beta.50",
+    "@orpc/tanstack-query": "2.0.0-beta.50",
+    "@tanstack/react-query": "^5.90.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0"
+  }
+}

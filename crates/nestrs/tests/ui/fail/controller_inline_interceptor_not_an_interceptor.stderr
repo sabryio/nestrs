@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `{integer}: Interceptor` is not satisfied
+ --> tests/ui/fail/controller_inline_interceptor_not_an_interceptor.rs:9:19
+  |
+9 |     #[interceptor(42)]
+  |                   ^^ the trait `Interceptor` is not implemented for `{integer}`
+  |
+help: the following other types implement trait `Interceptor`
+ --> $WORKSPACE/crates/nestrs-http/src/rate_limit.rs
+  |
+  | impl Interceptor for RateLimit {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RateLimit`
+  |
+ ::: $WORKSPACE/crates/nestrs-http/src/timeout.rs
+  |
+  | impl Interceptor for Timeout {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `nestrs::http::Timeout`
+note: required by a bound in `inline_interceptor`
+ --> $WORKSPACE/crates/nestrs-http/src/interceptor.rs
+  |
+  | pub fn inline_interceptor<I: Interceptor>(interceptor: I) -> Arc<I> {
+  |                              ^^^^^^^^^^^ required by this bound in `inline_interceptor`

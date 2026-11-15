@@ -1,0 +1,7 @@
+error: route handlers must take `&self` as their first parameter
+ --> tests/ui/fail/controller_missing_self.rs:6:1
+  |
+6 | #[controller("/c")]
+  | ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `controller` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,5 @@
+error: #[injectable] does not support generic structs
+ --> tests/ui/fail/injectable_generic.rs:4:15
+  |
+4 | struct Service<T> {
+  |               ^^^

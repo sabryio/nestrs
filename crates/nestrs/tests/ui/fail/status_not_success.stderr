@@ -1,0 +1,5 @@
+error: #[status] sets the success status and must be 2xx; document errors with #[response(404, "..")]
+ --> tests/ui/fail/status_not_success.rs:9:14
+  |
+9 |     #[status(404)]
+  |              ^^^

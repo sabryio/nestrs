@@ -1,0 +1,52 @@
+[package]
+name = "blog-api"
+description = "Example application: a small blog API built with nestrs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "blog_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "blog-api"
+path = "src/main.rs"
+
+[dependencies]
+nestrs.workspace = true
+nestrs-health.workspace = true
+nestrs-interceptors.workspace = true
+nestrs-kit.workspace = true
+nestrs-redis.workspace = true
+utoipa.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+sea-orm = { version = "2.0.4", default-features = false, features = [
+    "macros",
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "with-uuid",
+] }
+async-trait = "0.1"
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+validator.workspace = true
+sea-orm-migration = { version = "2.0.4", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+    "sqlx-sqlite",
+] }
+parking_lot = "0.13.0"
+
+[dev-dependencies]
+nestrs-testing.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+
+[lints]
+workspace = true

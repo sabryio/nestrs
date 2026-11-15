@@ -1,0 +1,5 @@
+error: use `#[get("/path")]`, not `#[get = "/path"]`
+ --> tests/ui/fail/controller_named_value_route.rs:8:5
+  |
+8 |     #[get = "/x"]
+  |     ^^^^^^^^^^^^^

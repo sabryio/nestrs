@@ -1,0 +1,5 @@
+error: route handlers must take `&self` as their first parameter
+ --> tests/ui/fail/controller_mut_self.rs:9:22
+  |
+9 |     async fn handler(&mut self) {}
+  |                      ^^^^^^^^^

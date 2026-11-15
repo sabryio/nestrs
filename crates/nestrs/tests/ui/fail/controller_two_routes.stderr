@@ -1,0 +1,5 @@
+error: a handler can have only one route attribute
+ --> tests/ui/fail/controller_two_routes.rs:9:5
+  |
+9 |     #[post]
+  |     ^^^^^^^

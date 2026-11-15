@@ -1,0 +1,20 @@
+error[E0277]: the trait bound `Plain: ProviderSource` is not satisfied
+ --> tests/ui/fail/module_not_injectable.rs:5:23
+  |
+5 | #[module(providers = [Plain])]
+  |                       ^^^^^ unsatisfied trait bound
+  |
+help: the trait `Injectable` is not implemented for `Plain`
+ --> tests/ui/fail/module_not_injectable.rs:3:1
+  |
+3 | struct Plain;
+  | ^^^^^^^^^^^^
+help: the following other types implement trait `Injectable`
+ --> $WORKSPACE/crates/nestrs-http/src/bearer.rs
+  |
+  | impl Injectable for BearerAuth {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `BearerAuth`
+...
+  | impl Injectable for OptionalBearerAuth {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `OptionalBearerAuth`
+  = note: required for `Plain` to implement `ProviderSource`

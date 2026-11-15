@@ -1,0 +1,5 @@
+error: nestrs controllers have no axum `State`: share services by injecting them as fields of the controller, or take `Inject<T>` for a single handler
+ --> tests/ui/fail/controller_axum_state.rs:9:36
+  |
+9 |     async fn handler(&self, count: nestrs::http::axum::extract::State<Arc<u32>>) -> String {
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

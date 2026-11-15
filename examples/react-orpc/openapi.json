@@ -1,0 +1,858 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Blog API",
+    "description": "Users and posts.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health/live": {
+      "get": {
+        "tags": [
+          "HealthController"
+        ],
+        "summary": "Liveness: the process is up and serving. Touches no dependency, so a failing database never gets the pod restarted.",
+        "operationId": "HealthController_live",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Liveness"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health/ready": {
+      "get": {
+        "tags": [
+          "HealthController"
+        ],
+        "summary": "Readiness: every critical dependency is healthy and the app is not shutting down. Answers 503 otherwise, with the per-check results in `error.details`.",
+        "operationId": "HealthController_ready",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready: a critical check is failing, or the app is draining",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/posts": {
+      "get": {
+        "tags": [
+          "PostsController"
+        ],
+        "summary": "List posts.",
+        "description": "Paginated with `limit` and `offset`.",
+        "operationId": "PostsController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 100 (default 20).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Items to skip (default 0).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PostResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "PostsController"
+        ],
+        "summary": "Publish a post as an existing author.",
+        "description": "Requires role admin or author.",
+        "operationId": "PostsController_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePostRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the required role or permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The author does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request body failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many writes; see the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/posts/events": {
+      "get": {
+        "tags": [
+          "PostsController"
+        ],
+        "summary": "Stream post events.",
+        "description": "Server-Sent Events: a flush comment, then one message per event\n(`published` or `removed`) each with an `id`, then `event: close` when the\nserver stops. Reconnect with a `Last-Event-ID` header to resume after that\nevent: what was missed is replayed first, then the stream goes live.",
+        "operationId": "PostsController_events",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "event",
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/PostEventDto"
+                        },
+                        "event": {
+                          "type": "string",
+                          "enum": [
+                            "message"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "retry": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "event",
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object"
+                        },
+                        "event": {
+                          "type": "string",
+                          "enum": [
+                            "close"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "event",
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object"
+                        },
+                        "event": {
+                          "type": "string",
+                          "enum": [
+                            "error"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/posts/{id}": {
+      "get": {
+        "tags": [
+          "PostsController"
+        ],
+        "summary": "Fetch one post by id.",
+        "operationId": "PostsController_find",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No post with this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "PostsController"
+        ],
+        "summary": "Delete a post.",
+        "description": "Requires permission posts:delete.",
+        "operationId": "PostsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the required role or permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No post with this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "UsersController"
+        ],
+        "summary": "List users.",
+        "description": "Paginated with `limit` and `offset`.",
+        "operationId": "UsersController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 100 (default 20).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Items to skip (default 0).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "UsersController"
+        ],
+        "summary": "Register a user. Emails are unique, case-insensitively. The response echoes the request id (the caller's `x-request-id`, or a generated one).",
+        "description": "Requires role admin.",
+        "operationId": "UsersController_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the required role or permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The email is already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request body failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many writes; see the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": [
+          "UsersController"
+        ],
+        "summary": "Fetch one user by id.",
+        "operationId": "UsersController_find",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No user with this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CheckResult": {
+        "type": "object",
+        "description": "One indicator's result.",
+        "required": [
+          "name",
+          "status",
+          "critical",
+          "latency_ms"
+        ],
+        "properties": {
+          "critical": {
+            "type": "boolean",
+            "description": "Whether its failure makes the service not ready."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it failed; absent when healthy or when details are hidden."
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How long the check took, in milliseconds.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "The indicator's name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status",
+            "description": "Whether it is healthy."
+          }
+        }
+      },
+      "CreatePostRequest": {
+        "type": "object",
+        "description": "Request body for `POST /posts`.",
+        "required": [
+          "author_id",
+          "title",
+          "body"
+        ],
+        "properties": {
+          "author_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Must be an existing user."
+          },
+          "body": {
+            "type": "string",
+            "description": "Body text, at least one character.",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "Headline, 1–200 characters.",
+            "maxLength": 200,
+            "minLength": 1
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "description": "Request body for `POST /users`.",
+        "required": [
+          "name",
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address; compared case-insensitively."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, 1–100 characters.",
+            "maxLength": 100,
+            "minLength": 1
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Body of [`ErrorEnvelope`].",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code (`not_found`, `validation_failed`, ..)."
+          },
+          "details": {
+            "description": "Per-field details for validation failures."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable message."
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "description": "The error envelope every failure uses (see `HttpError`).",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        }
+      },
+      "Liveness": {
+        "type": "object",
+        "description": "Body of the liveness probe.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `\"ok\"` while the process is serving."
+          }
+        }
+      },
+      "PostEventDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A post was published.",
+            "required": [
+              "post",
+              "type"
+            ],
+            "properties": {
+              "post": {
+                "$ref": "#/components/schemas/PostResponse",
+                "description": "The new post."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "published"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A post was deleted.",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Id of the deleted post."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "removed"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "One event on `GET /posts/events`, discriminated by `type`.\n\nThis is the stream's contract: the handler returns `EventStream<PostEventDto>`,\nso the OpenAPI document (and any generated client) knows every shape a message\ncan take."
+      },
+      "PostResponse": {
+        "type": "object",
+        "description": "A post as returned to clients.",
+        "required": [
+          "id",
+          "author_id",
+          "title",
+          "body"
+        ],
+        "properties": {
+          "author_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The author's user id."
+          },
+          "body": {
+            "type": "string",
+            "description": "Body text."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier."
+          },
+          "title": {
+            "type": "string",
+            "description": "Headline."
+          }
+        }
+      },
+      "Readiness": {
+        "type": "object",
+        "description": "Body of a successful readiness probe: every critical check passed.",
+        "required": [
+          "status",
+          "checks"
+        ],
+        "properties": {
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckResult"
+            },
+            "description": "Every check's result."
+          },
+          "status": {
+            "type": "string",
+            "description": "`\"ok\"`, or `\"degraded\"` when only non-critical checks are down."
+          }
+        }
+      },
+      "Status": {
+        "type": "string",
+        "description": "Outcome of one check.",
+        "enum": [
+          "up",
+          "down"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "A user as returned to clients.",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Lower-cased email address."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

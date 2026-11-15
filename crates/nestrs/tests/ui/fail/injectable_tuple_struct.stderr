@@ -1,0 +1,5 @@
+error: #[injectable] needs named fields (or a unit struct)
+ --> tests/ui/fail/injectable_tuple_struct.rs:4:15
+  |
+4 | struct Service(Arc<u8>);
+  |               ^^^^^^^^^

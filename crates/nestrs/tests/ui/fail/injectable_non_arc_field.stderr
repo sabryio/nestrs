@@ -1,0 +1,15 @@
+error[E0277]: `std::string::String` cannot be injected
+ --> tests/ui/fail/injectable_non_arc_field.rs:5:11
+  |
+5 |     name: String,
+  |           ^^^^^^ not an injectable handle
+  |
+  = help: the trait `Dependency` is not implemented for `std::string::String`
+  = note: inject `Arc<T>` (or a port alias such as `UserRepositoryPort`); mark non-injected fields with `#[inject(default)]`
+help: the trait `Dependency` is implemented for `Arc<T>`
+ --> $WORKSPACE/crates/nestrs-core/src/dependency.rs
+  |
+  | / impl<T> Dependency for Arc<T>
+  | | where
+  | |     T: ?Sized + Send + Sync + 'static,
+  | |______________________________________^

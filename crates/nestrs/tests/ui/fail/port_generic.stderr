@@ -1,0 +1,5 @@
+error: #[port] does not support generic traits (the alias would need the same parameters)
+ --> tests/ui/fail/port_generic.rs:4:17
+  |
+4 | trait Repository<T> {
+  |                 ^^^
