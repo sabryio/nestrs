@@ -58,7 +58,7 @@ pub fn rate_limit_store(redis: Arc<SharedRedis>) -> RateLimitStorePort {
 
 /// Readiness for Redis. Non-critical: with Redis down the limiter fails open and idempotent
 /// writes answer 503, which is worth reporting but not worth pulling the pod out of rotation.
-/// Healthy by definition when Redis is not configured.
+/// Left out of the report entirely when Redis is not configured.
 #[injectable(contributes = HealthIndicatorPort)]
 pub struct RedisHealth {
     redis: Arc<SharedRedis>,
@@ -70,12 +70,16 @@ impl HealthIndicator for RedisHealth {
         "redis"
     }
 
+    fn enabled(&self) -> bool {
+        self.redis.connection().is_some()
+    }
+
     fn critical(&self) -> bool {
         false
     }
 
     async fn check(&self) -> Result<(), Unhealthy> {
-        match &self.redis.0 {
+        match self.redis.connection() {
             Some(connection) => RedisIndicator::new(connection.clone()).check().await,
             None => Ok(()),
         }

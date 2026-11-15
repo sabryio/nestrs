@@ -30,6 +30,8 @@ pub struct Names {
     pub pascal_plural: String,
     /// `invoice-lines`: URL segment.
     pub route: String,
+    /// `invoice-line`: queue and job names.
+    pub route_singular: String,
 }
 
 const RESERVED: &[&str] = &[
@@ -93,12 +95,14 @@ impl Names {
         let pascal = to_pascal(&snake);
         let pascal_plural = to_pascal(&plural);
         let route = plural.replace('_', "-");
+        let route_singular = snake.replace('_', "-");
         Ok(Self {
             snake,
             pascal,
             plural,
             pascal_plural,
             route,
+            route_singular,
         })
     }
 }

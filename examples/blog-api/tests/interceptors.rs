@@ -85,7 +85,7 @@ async fn responses_are_hardened() {
 }
 
 #[tokio::test]
-async fn main_can_resolve_the_shared_rate_limit_store_and_readiness_reports_redis() {
+async fn main_can_resolve_the_shared_rate_limit_store_and_readiness_omits_unconfigured_redis() {
     let app = TestApp::start(AppModule).await;
     // `main` builds the app-wide limit from this port; without Redis it is the in-memory store.
     app.container()
@@ -103,5 +103,8 @@ async fn main_can_resolve_the_shared_rate_limit_store_and_readiness_reports_redi
         .as_array()
         .and_then(|checks| checks.iter().find(|check| check["name"] == "redis"))
         .cloned();
-    assert!(redis.is_some(), "{ready}");
+    assert!(
+        redis.is_none(),
+        "Redis is not configured, so it is not reported: {ready}"
+    );
 }

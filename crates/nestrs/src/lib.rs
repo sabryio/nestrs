@@ -50,7 +50,7 @@ pub mod http {
 /// types and `IntoParams` on query structs; your crate needs a
 /// direct `utoipa` dependency for the derives to compile.
 pub mod openapi {
-    pub use nestrs_http::openapi::ApiInfo;
+    pub use nestrs_http::openapi::{ApiInfo, BodyDoc, ResponseDoc, RouteDoc};
     pub use nestrs_http::utoipa;
     pub use nestrs_http::utoipa::{IntoParams, ToSchema};
 }

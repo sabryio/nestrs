@@ -8,6 +8,7 @@ use nestrs::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
+use tokio::time::Instant;
 
 /// The queue backend failed or refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -40,19 +41,34 @@ pub struct Reserved {
     pub receipt: String,
 }
 
-/// Port: durable FIFO queues with explicit acknowledgement (at-least-once).
+/// Port: durable FIFO queues with leased delivery (at-least-once).
 ///
-/// Contract: an envelope returned by `reserve` is invisible to other workers until it is
-/// `ack`ed (gone), `retry`ed (back on the queue with new attempts) or `bury`ed (moved to
-/// the dead letters). A worker that crashes holding one must not lose it: durable
-/// backends hand it out again after [`recover`](Self::recover).
+/// A worker `reserve`s work for a `lease`. While it holds the lease nobody else gets the
+/// work; it must `renew` the lease if it needs longer, and finish with `ack` (done),
+/// `retry` (back on the queue) or `bury` (dead letters). If the worker dies, the lease
+/// runs out and [`reap`](Self::reap) puts the work back, so recovery needs no restart
+/// and never touches work a live worker still holds.
+///
+/// Contract:
+/// * `reserve` returns the oldest waiting work, hidden from others until its lease ends.
+/// * `renew` returns `false` if the lease is already gone (the work was reaped and may
+///   be running elsewhere); the holder should expect a duplicate.
+/// * `ack`, `retry` and `bury` act only while the lease is still held; after it was
+///   lost they do nothing, so a late worker cannot duplicate or erase work that has
+///   moved on.
+/// * `reap` returns expired work to the queue with its attempt count raised by one (a
+///   worker that died mid-run did try). Work whose count would reach `max_attempts` goes
+///   to the dead letters instead, so work that kills its worker cannot loop forever.
 #[port]
 pub trait QueueBackend {
     /// Appends work.
     async fn push(&self, queue: &str, envelope: Envelope) -> Result<(), QueueError>;
 
-    /// Takes the oldest work, waiting up to `wait` for some to arrive. `None` on timeout.
-    async fn reserve(&self, queue: &str, wait: Duration) -> Result<Option<Reserved>, QueueError>;
+    /// Takes the oldest work under a `lease`, waiting up to `wait` for some to arrive.
+    async fn reserve(&self, queue: &str, wait: Duration, lease: Duration) -> Result<Option<Reserved>, QueueError>;
+
+    /// Extends the lease to `lease` from now. `false` if it was already lost.
+    async fn renew(&self, queue: &str, reserved: &Reserved, lease: Duration) -> Result<bool, QueueError>;
 
     /// Done: forget it.
     async fn ack(&self, queue: &str, reserved: &Reserved) -> Result<(), QueueError>;
@@ -63,12 +79,15 @@ pub trait QueueBackend {
     /// Failed for good: keep it in the dead letters for inspection.
     async fn bury(&self, queue: &str, reserved: &Reserved) -> Result<(), QueueError>;
 
-    /// Makes everything reserved by workers that no longer exist available again.
-    /// Called once at startup, before any worker reserves.
-    async fn recover(&self, queue: &str) -> Result<usize, QueueError>;
+    /// Returns work whose lease expired to the queue (or the dead letters, see above).
+    /// Returns how many were requeued or buried.
+    async fn reap(&self, queue: &str, max_attempts: u32) -> Result<usize, QueueError>;
 
-    /// How many envelopes are waiting (not counting reserved or dead ones).
+    /// How many envelopes are waiting (not counting leased or dead ones).
     async fn len(&self, queue: &str) -> Result<usize, QueueError>;
+
+    /// How many envelopes are currently leased.
+    async fn leased_len(&self, queue: &str) -> Result<usize, QueueError>;
 
     /// How many envelopes were buried.
     async fn dead_len(&self, queue: &str) -> Result<usize, QueueError>;
@@ -162,7 +181,9 @@ pub fn decode<T: DeserializeOwned>(payload: &str) -> Result<T, HandlerError> {
 #[derive(Default)]
 struct MemoryQueue {
     waiting: VecDeque<Envelope>,
-    reserved: HashMap<String, Envelope>,
+    /// id → (work, lease end, reservation number). The number tells a current holder from a
+    /// previous one that lost its lease.
+    leased: HashMap<String, (Envelope, Instant, u64)>,
     dead: Vec<Envelope>,
 }
 
@@ -171,6 +192,13 @@ struct MemoryQueue {
 pub struct MemoryQueueBackend {
     queues: Mutex<HashMap<String, MemoryQueue>>,
     arrived: Notify,
+    reservations: std::sync::atomic::AtomicU64,
+}
+
+/// Splits `id#number`.
+fn holder(receipt: &str) -> (&str, u64) {
+    let (id, number) = receipt.rsplit_once('#').unwrap_or((receipt, "0"));
+    (id, number.parse().unwrap_or(0))
 }
 
 impl MemoryQueueBackend {
@@ -193,20 +221,22 @@ impl QueueBackend for MemoryQueueBackend {
         Ok(())
     }
 
-    async fn reserve(&self, queue: &str, wait: Duration) -> Result<Option<Reserved>, QueueError> {
-        let deadline = tokio::time::Instant::now() + wait;
+    async fn reserve(&self, queue: &str, wait: Duration, lease: Duration) -> Result<Option<Reserved>, QueueError> {
+        let deadline = Instant::now() + wait;
         loop {
             // Register interest before checking, so a push between the two is not missed.
             let notified = self.arrived.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
+            let number = self.reservations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let taken = self.with(queue, |q| {
                 q.waiting.pop_front().inspect(|envelope| {
-                    q.reserved.insert(envelope.id.clone(), envelope.clone());
+                    q.leased
+                        .insert(envelope.id.clone(), (envelope.clone(), Instant::now() + lease, number));
                 })
             });
             if let Some(envelope) = taken {
-                let receipt = envelope.id.clone();
+                let receipt = format!("{}#{number}", envelope.id);
                 return Ok(Some(Reserved { envelope, receipt }));
             }
             if tokio::time::timeout_at(deadline, notified).await.is_err() {
@@ -215,42 +245,88 @@ impl QueueBackend for MemoryQueueBackend {
         }
     }
 
+    async fn renew(&self, queue: &str, reserved: &Reserved, lease: Duration) -> Result<bool, QueueError> {
+        let (id, number) = holder(&reserved.receipt);
+        Ok(self.with(queue, |q| match q.leased.get_mut(id) {
+            Some((_, until, current)) if *current == number => {
+                *until = Instant::now() + lease;
+                true
+            }
+            _ => false,
+        }))
+    }
+
     async fn ack(&self, queue: &str, reserved: &Reserved) -> Result<(), QueueError> {
-        self.with(queue, |q| q.reserved.remove(&reserved.receipt));
+        let (id, number) = holder(&reserved.receipt);
+        self.with(queue, |q| {
+            if q.leased.get(id).is_some_and(|(_, _, current)| *current == number) {
+                q.leased.remove(id);
+            }
+        });
         Ok(())
     }
 
     async fn retry(&self, queue: &str, reserved: &Reserved, envelope: Envelope) -> Result<(), QueueError> {
-        self.with(queue, |q| {
-            q.reserved.remove(&reserved.receipt);
-            q.waiting.push_back(envelope);
+        let (id, number) = holder(&reserved.receipt);
+        let held = self.with(queue, |q| {
+            let held = q.leased.get(id).is_some_and(|(_, _, current)| *current == number);
+            if held {
+                q.leased.remove(id);
+                q.waiting.push_back(envelope);
+            }
+            held
         });
-        self.arrived.notify_waiters();
+        if held {
+            self.arrived.notify_waiters();
+        }
         Ok(())
     }
 
     async fn bury(&self, queue: &str, reserved: &Reserved) -> Result<(), QueueError> {
+        let (id, number) = holder(&reserved.receipt);
         self.with(queue, |q| {
-            if let Some(envelope) = q.reserved.remove(&reserved.receipt) {
+            if q.leased.get(id).is_some_and(|(_, _, current)| *current == number)
+                && let Some((envelope, ..)) = q.leased.remove(id)
+            {
                 q.dead.push(envelope);
             }
         });
         Ok(())
     }
 
-    async fn recover(&self, queue: &str) -> Result<usize, QueueError> {
+    async fn reap(&self, queue: &str, max_attempts: u32) -> Result<usize, QueueError> {
+        let now = Instant::now();
         let count = self.with(queue, |q| {
-            let stranded: Vec<Envelope> = q.reserved.drain().map(|(_, envelope)| envelope).collect();
-            let count = stranded.len();
-            q.waiting.extend(stranded);
-            count
+            let expired: Vec<String> = q
+                .leased
+                .iter()
+                .filter(|(_, (_, until, _))| *until <= now)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &expired {
+                if let Some((mut envelope, ..)) = q.leased.remove(id) {
+                    envelope.attempts += 1;
+                    if envelope.attempts >= max_attempts {
+                        q.dead.push(envelope);
+                    } else {
+                        q.waiting.push_back(envelope);
+                    }
+                }
+            }
+            expired.len()
         });
-        self.arrived.notify_waiters();
+        if count > 0 {
+            self.arrived.notify_waiters();
+        }
         Ok(count)
     }
 
     async fn len(&self, queue: &str) -> Result<usize, QueueError> {
         Ok(self.with(queue, |q| q.waiting.len()))
+    }
+
+    async fn leased_len(&self, queue: &str) -> Result<usize, QueueError> {
+        Ok(self.with(queue, |q| q.leased.len()))
     }
 
     async fn dead_len(&self, queue: &str) -> Result<usize, QueueError> {

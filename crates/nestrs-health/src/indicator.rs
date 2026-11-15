@@ -42,6 +42,13 @@ pub trait HealthIndicator {
     /// A stable, unique label, shown in the report (`"database"`).
     fn name(&self) -> &str;
 
+    /// Whether this indicator applies in this deployment. A disabled one is left out of the
+    /// report entirely (not shown as healthy), so an optional dependency that is not configured
+    /// does not clutter the answer. Defaults to `true`.
+    fn enabled(&self) -> bool {
+        true
+    }
+
     /// Whether a failure makes the service *not ready*. A non-critical check (a
     /// recommendation service, a cache) is still reported, but only degrades the
     /// answer. Defaults to `true`.

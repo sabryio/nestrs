@@ -57,10 +57,26 @@ impl HealthIndicator for Cache {
     }
 }
 
+/// An optional dependency that is not configured here: critical and broken, but disabled.
+#[injectable(contributes = HealthIndicatorPort)]
+struct NotConfigured;
+#[async_trait]
+impl HealthIndicator for NotConfigured {
+    fn name(&self) -> &str {
+        "not-configured"
+    }
+    fn enabled(&self) -> bool {
+        false
+    }
+    async fn check(&self) -> Result<(), Unhealthy> {
+        Err(Unhealthy::new("would fail if it ran"))
+    }
+}
+
 /// Each feature module contributes its own check; the health module knows neither.
 #[module(providers = [Switches], exports = [Switches], global = true)]
 struct SwitchesModule;
-#[module(providers = [Database])]
+#[module(providers = [Database, NotConfigured])]
 struct DatabaseModule;
 #[module(providers = [Cache])]
 struct CacheModule;
@@ -114,6 +130,25 @@ async fn ready_lists_every_contributed_check() {
     assert_eq!(names.len(), 2);
     assert!(names.contains(&"database") && names.contains(&"cache"));
     assert!(body["checks"][0]["status"] == "up" && body["checks"][0].get("error").is_none());
+}
+
+#[tokio::test]
+async fn a_disabled_indicator_is_neither_run_nor_reported() {
+    let app = TestApp::start(AppModule).await;
+    let body: Value = app
+        .client()
+        .get("/health/ready")
+        .send()
+        .await
+        .assert_status(StatusCode::OK)
+        .json();
+    let names: Vec<_> = body["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["name"].as_str().unwrap())
+        .collect();
+    assert!(!names.contains(&"not-configured"), "{names:?}");
 }
 
 #[tokio::test]

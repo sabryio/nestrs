@@ -14,6 +14,7 @@ struct Probe {
     ticks: AtomicU32,
     attempts: AtomicU32,
     handled: Mutex<Vec<String>>,
+    slow_runs: AtomicU32,
 }
 
 #[injectable(contributes = JobPort)]
@@ -71,9 +72,30 @@ impl QueueHandler for Mailer {
     }
 }
 
+/// A handler that takes far longer than the lease.
+#[injectable(contributes = QueueHandlerPort)]
+struct Slow {
+    probe: Arc<Probe>,
+}
+
+#[async_trait]
+impl QueueHandler for Slow {
+    fn queue(&self) -> &str {
+        "slow"
+    }
+    fn timeout(&self) -> Duration {
+        Duration::from_secs(60)
+    }
+    async fn handle(&self, _: &str) -> Result<(), HandlerError> {
+        self.probe.slow_runs.fetch_add(1, Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        Ok(())
+    }
+}
+
 #[module(
     imports = [JobsModule::in_memory()],
-    providers = [Tick, Mailer, Provider::value(Probe::default())],
+    providers = [Tick, Mailer, Slow, Provider::value(Probe::default())],
 )]
 struct AppModule;
 
@@ -166,4 +188,77 @@ async fn disabled_jobs_start_nothing() {
     tokio::time::sleep(Duration::from_secs(60)).await;
     settle().await;
     assert_eq!(app.resolve::<Probe>().ticks.load(Ordering::SeqCst), 0);
+}
+
+fn short_leases() -> JobsConfig {
+    JobsConfig {
+        lease: Duration::from_secs(3),
+        reap_every: Duration::from_secs(1),
+        ..JobsConfig::default()
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_job_keeps_its_lease_and_runs_exactly_once() {
+    let app = TestApp::builder(AppModule).override_value(short_leases()).start().await;
+    let probe = app.resolve::<Probe>();
+    let backend = app.resolve::<QueueBackendPort>();
+    app.resolve::<Queue>().enqueue("slow", &1).await.unwrap();
+
+    // Ten seconds of work under a three second lease: only renewals keep it ours.
+    for _ in 0..14 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        settle().await;
+    }
+    assert_eq!(
+        probe.slow_runs.load(Ordering::SeqCst),
+        1,
+        "never reaped, never duplicated"
+    );
+    assert_eq!(backend.leased_len("slow").await.unwrap(), 0, "acked at the end");
+    assert_eq!(backend.dead_len("slow").await.unwrap(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_worker_that_dies_loses_its_work_to_the_reaper_and_poison_is_buried() {
+    let app = TestApp::builder(AppModule).override_value(short_leases()).start().await;
+    let backend = app.resolve::<QueueBackendPort>();
+    let queue = "orphans";
+    let envelope = |id: &str| Envelope {
+        id: id.into(),
+        payload: "1".into(),
+        attempts: 0,
+    };
+
+    backend.push(queue, envelope("a")).await.unwrap();
+    // A worker takes it and then vanishes: no renew, no ack.
+    let _lost = backend
+        .reserve(queue, Duration::from_secs(1), Duration::from_secs(3))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(backend.reap(queue, 5).await.unwrap(), 0, "a live lease is left alone");
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    assert_eq!(backend.reap(queue, 5).await.unwrap(), 1);
+    let again = backend
+        .reserve(queue, Duration::from_secs(1), Duration::from_secs(3))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(again.envelope.attempts, 1, "the lost attempt counts");
+
+    // A late ack from the dead worker must not erase what moved on.
+    backend.ack(queue, &_lost).await.unwrap();
+    assert_eq!(
+        backend.leased_len(queue).await.unwrap(),
+        1,
+        "the new holder still has it"
+    );
+
+    // Work that keeps killing its worker is buried once it reaches max_attempts.
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    assert_eq!(backend.reap(queue, 2).await.unwrap(), 1);
+    assert_eq!(backend.dead_len(queue).await.unwrap(), 1);
+    assert_eq!(backend.len(queue).await.unwrap(), 0);
 }

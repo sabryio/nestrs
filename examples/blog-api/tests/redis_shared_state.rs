@@ -21,6 +21,14 @@ impl Drop for Redis {
     }
 }
 
+/// With `REQUIRE_REDIS` set (CI), a missing `redis-server` fails the run instead of skipping it.
+fn missing(error: &std::io::Error) {
+    assert!(
+        std::env::var_os("REQUIRE_REDIS").is_none(),
+        "REQUIRE_REDIS is set but redis-server cannot be started: {error}"
+    );
+}
+
 fn start_redis() -> Option<(Redis, String)> {
     let port = TcpListener::bind("127.0.0.1:0").ok()?.local_addr().ok()?.port();
     let child = Command::new("redis-server")
@@ -28,6 +36,7 @@ fn start_redis() -> Option<(Redis, String)> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
+        .inspect_err(missing)
         .ok()?;
     Some((Redis(child), format!("redis://127.0.0.1:{port}/")))
 }
@@ -76,4 +85,25 @@ async fn a_retry_on_another_instance_replays_the_first_response() {
     assert_eq!(first.json::<Value>()["id"], retry.json::<Value>()["id"]);
     let users: Value = two.client().get("/users").send().await.json();
     assert_eq!(users, json!([]), "the second instance never ran the write");
+}
+
+#[tokio::test]
+async fn readiness_reports_redis_when_it_is_configured() {
+    let Some((_redis, url)) = start_redis() else {
+        eprintln!("redis-server not installed: skipping");
+        return;
+    };
+    let app = instance(&url).await;
+    let ready: Value = app
+        .client()
+        .get("/health/ready")
+        .send()
+        .await
+        .assert_status(StatusCode::OK)
+        .json();
+    let redis = ready["checks"]
+        .as_array()
+        .and_then(|checks| checks.iter().find(|check| check["name"] == "redis"))
+        .unwrap_or_else(|| panic!("redis is configured, so it is reported: {ready}"));
+    assert_eq!(redis["status"], "up");
 }

@@ -66,6 +66,27 @@ enum Generate {
         #[command(flatten)]
         common: Common,
     },
+    /// An empty feature module in `composition/`, imported by `AppModule`.
+    Module {
+        /// Singular name, e.g. `billing`.
+        name: String,
+        #[command(flatten)]
+        common: Common,
+    },
+    /// A scheduled job (`nestrs-jobs`), registered in `AppModule` with its `JobsModule`.
+    Job {
+        /// Name, e.g. `purge-drafts`.
+        name: String,
+        #[command(flatten)]
+        common: Common,
+    },
+    /// A queue consumer and its message type (`nestrs-jobs`), registered like a job.
+    QueueHandler {
+        /// Name, e.g. `send-welcome`; also the queue's name.
+        name: String,
+        #[command(flatten)]
+        common: Common,
+    },
 }
 
 fn main() -> ExitCode {
@@ -101,11 +122,22 @@ fn run(cli: Cli) -> Result<(), commands::CliError> {
             print(&report, common.dry_run);
             println!("\nNext:\n  cd {name}\n  nestrs generate feature <name>\n  cargo run");
         }
-        Command::Generate {
-            what: Generate::Feature { name, plural, common },
-        } => {
+        Command::Generate { what } => {
             let mut workspace = DiskWorkspace::new(".");
-            let report = commands::new_feature(&mut workspace, &name, plural.as_deref(), common.into())?;
+            let (report, common) = match what {
+                Generate::Feature { name, plural, common } => (
+                    commands::new_feature(&mut workspace, &name, plural.as_deref(), common.into())?,
+                    common,
+                ),
+                Generate::Module { name, common } => {
+                    (commands::new_module(&mut workspace, &name, common.into())?, common)
+                }
+                Generate::Job { name, common } => (commands::new_job(&mut workspace, &name, common.into())?, common),
+                Generate::QueueHandler { name, common } => (
+                    commands::new_queue_handler(&mut workspace, &name, common.into())?,
+                    common,
+                ),
+            };
             print(&report, common.dry_run);
         }
     }

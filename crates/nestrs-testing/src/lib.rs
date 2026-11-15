@@ -99,6 +99,12 @@ impl<M: Module> TestAppBuilder<M> {
         self
     }
 
+    /// Mounts a raw router with guards, interceptors and docs, as `App::builder(..).mount` does.
+    pub fn mount(mut self, mount: nestrs_http::Mount) -> Self {
+        self.inner = self.inner.mount(mount);
+        self
+    }
+
     /// Mounts the app under `prefix`, like `App::global_prefix`; the client then
     /// needs the prefix in its paths.
     pub fn global_prefix(mut self, prefix: &str) -> Self {

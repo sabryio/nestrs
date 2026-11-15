@@ -377,15 +377,10 @@ pub fn feature(names: &Names, lib: &str) -> Plan {
             format!("pub use {plural}_module::{pascal_plural}Module;"),
         ],
     )
-    .insert_after(
+    .import_module(
         "src/composition/app.rs",
-        "use nestrs_kit::KitModule;",
-        format!("\nuse super::{pascal_plural}Module;"),
-    )
-    .insert_after(
-        "src/composition/app.rs",
-        "imports = [",
-        format!("{pascal_plural}Module, "),
+        &format!("{pascal_plural}Module"),
+        &format!("super::{pascal_plural}Module"),
     );
     plan
 }

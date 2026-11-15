@@ -13,6 +13,9 @@ pub trait Workspace {
     fn read(&self, path: &Path) -> io::Result<Option<String>>;
     /// Writes `contents`, creating directories as needed.
     fn write(&mut self, path: &Path, contents: &str) -> io::Result<()>;
+    /// Formats files that were just created. Best effort: a workspace that cannot (memory) does
+    /// nothing, and so does one whose formatter is missing.
+    fn format(&mut self, _paths: &[PathBuf]) {}
 }
 
 /// The real file system under `root`.
@@ -43,6 +46,24 @@ impl Workspace for DiskWorkspace {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(full, contents)
+    }
+
+    fn format(&mut self, paths: &[PathBuf]) {
+        let files: Vec<_> = paths
+            .iter()
+            .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+            .map(|path| self.root.join(path))
+            .collect();
+        if files.is_empty() {
+            return;
+        }
+        // Edition 2024 is what generated projects use; a missing rustfmt is not an error.
+        let _ = std::process::Command::new("rustfmt")
+            .args(["--edition", "2024"])
+            .args(&files)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
     }
 }
 

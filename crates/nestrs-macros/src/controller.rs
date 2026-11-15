@@ -715,7 +715,7 @@ fn route_doc(
     let secured = !class_guards.is_empty() || !route.guards.is_empty();
     // Anonymous callers are fine only when every guard on the route is an optional one.
     let guard_types = class_guards.iter().chain(route.guards.iter());
-    let anonymous_ok = quote!(true #(&& <#guard_types as ::nestrs::http::Guard>::ANONYMOUS_OK)*);
+    let anonymous_ok = quote!(true #(&& (&Probe::<#guard_types>::new()).guard_anonymous_ok())*);
     let requires = class_requirements
         .iter()
         .chain(route.requirements.iter())
@@ -729,8 +729,9 @@ fn route_doc(
     quote! {
         {
             use ::nestrs::http::openapi::{
-                Probe, ResponseDoc, RouteDoc, ViaIntoParams as _, ViaPartialSchema as _, ViaToSchema as _,
-                WithoutIntoParams as _, WithoutPartialSchema as _, WithoutToSchema as _,
+                Probe, ResponseDoc, RouteDoc, ViaGuard as _, ViaIntoParams as _, ViaPartialSchema as _,
+                ViaToSchema as _, WithoutGuard as _, WithoutIntoParams as _, WithoutPartialSchema as _,
+                WithoutToSchema as _,
             };
             RouteDoc::new(
                 #verb,

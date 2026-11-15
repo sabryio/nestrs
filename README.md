@@ -483,11 +483,15 @@ self.queue.enqueue("welcome-emails", &Welcome { user }).await?;   // inject `Que
 ```
 
 Jobs: a `JobLock` makes one instance run each tick, a job never overlaps itself, and a timeout or panic is a logged
-failure. Queues are at-least-once: reserve, then ack, retry with exponential backoff, or bury after `max_attempts`
-(at once for `Fatal`); work held by a crashed worker is recovered at startup. Everything stops within
-`JobsConfig::shutdown_grace`. `nestrs-redis` supplies `RedisJobLock` and `RedisQueueBackend` (`BLMOVE` into a
-processing list, atomic retry/bury scripts). `JobsModule::with_backends(config, lock, queue)` plugs them in.
-Redis recovery moves *all* in-flight work back, so run it where an occasional duplicate is acceptable.
+failure. Queues are at-least-once with **leases**: a worker reserves work for `JobsConfig::lease`, renews it while the
+handler runs (so a long job is never mistaken for a dead worker), and finishes with ack, retry (exponential backoff)
+or bury (after `max_attempts`, at once for `Fatal`). If a worker dies, its lease expires and a reaper
+(`reap_every`) returns the work to the queue with one more attempt, or buries it at the limit, so work that kills
+its worker cannot loop forever and nothing needs a restart. A worker that lost its lease cannot ack, retry or bury
+work that moved on. Everything stops within `JobsConfig::shutdown_grace`. `nestrs-redis` supplies `RedisJobLock` and
+`RedisQueueBackend` (waiting list + sorted set of leases scored by server time, atomic Lua for reserve, renew,
+retry, bury and reap; `reserve` polls every 50 ms while empty). `JobsModule::with_backends(config, lock, queue)`
+plugs them in.
 
 ### nestrs-cache: service-level caching
 
@@ -505,7 +509,11 @@ nestrs new shop-api                         # clean-architecture service that bo
 cd shop-api && nestrs generate feature invoice
 ```
 
-`generate feature` writes one slice through every layer (domain entity + repository port, use cases, in-memory
+`generate module|job|queue-handler <name>` add an empty feature module, a scheduled job, or a queue consumer (with its
+message type); jobs and handlers also add `nestrs-jobs` to `Cargo.toml` (following however `nestrs` is declared),
+import `JobsModule::in_memory()` once, and register themselves as providers. `AppModule` is edited by parsing it
+with `syn` (spans give exact offsets) and splicing, so multi-line lists, comments and trailing commas survive;
+new files are run through `rustfmt`, existing ones are only spliced. `generate feature` writes one slice through every layer (domain entity + repository port, use cases, in-memory
 adapter, controller + DTOs + error mapping, module, an HTTP test) and registers it in each layer's `mod.rs` and in
 `AppModule`. It never overwrites (`--force` to), is idempotent, supports `--dry-run`, and reports anything it could
 not patch so you can do it by hand. `nestrs new --nestrs-path <checkout>` points the project at a local nestrs.
@@ -536,6 +544,26 @@ default; `SOAK_SECS=600 SOAK_WORKERS=64 cargo test -p nestrs-bench --release --t
 soak) and checks the contracts from outside: only allowed statuses, the bulkhead never over capacity, an idempotency
 key never runs a write twice, the cache stays bounded and spares the handler, the circuit breaker opens and recovers,
 metrics count every request exactly once, request ids are unique.
+
+### Mount: raw routes with a controller's protections
+
+`AppBuilder::merge` mounts a raw axum router with the app-wide pipeline. `Mount` adds, by builder, what a controller
+declares by attribute: guards, interceptors and OpenAPI entries.
+
+```rust
+App::builder(AppModule).mount(
+    Mount::new(Router::new().route("/webhooks/stripe", post(stripe_webhook)))
+        .interceptor(RateLimit::per_minute(120))
+        .guard::<BearerAuth>()
+        .document(RouteDoc::post("/webhooks/stripe", "stripe_webhook").tagged("Webhooks")
+            .request_body(Some(BodyDoc::of::<StripeEvent>()))),
+)
+```
+
+Order is a controller's: guards, then interceptors, then the handler, whatever order the calls are written in; the
+last interceptor added is outermost. Documented routes are marked secured when the mount has a guard (and anonymous
+when every guard is optional); undocumented routes stay out of the spec. `Mount::with(|container| ..)` builds the
+router from providers.
 
 ### Roles and permissions
 
@@ -881,36 +909,11 @@ once per database and is recorded in `seaql_migrations`.
 
 ## Known limits
 
-- Merged raw axum routes (`AppBuilder::merge`) get scopes, filters, prefix and app interceptors, but no guards,
-  route interceptors or OpenAPI docs.
-- Redis-backed tests need a local `redis-server` and skip when it is missing.
-- `RedisQueueBackend::recover` cannot tell a dead worker's work from a live one's, so it requeues everything in flight.
-- The CLI only has `new` and `generate feature`; it patches `AppModule` by anchor text and reports when it cannot.
-- Module encapsulation is a startup check, not a compile-time one.
-- Lifecycle hooks are `init` and `destroy` only, and run for singletons. A request-scoped provider
-  cannot be injected into a controller field, only resolved per call (`Inject<T>`).
-- `Inject<T>` is resolved at call time, so a missing provider is caught at startup only because the
-  macro declares it; resolving by hand from a `RequestScope` is not checked.
-- OpenAPI: a `Piped<P>` documents its query through `Pipe::parameters`; `Query<T>` needs `IntoParams`
-  to be documented; `#[response]` documents error statuses with a description but not a custom body type.
-- Migrations: `Migrator` is public, but the example ships no CLI around it; run it with
-  `Database::migrate()` or `BLOG_MIGRATE_ON_START` (a separate `migrate` command is a small addition).
-  Never edit a migration that has shipped; add a new one.
-- Edition 2024 makes `std::env::set_var` unsafe, so tests inject variables with `ConfigSource::env_vars(..)`
-  instead of editing the process environment.
-- Route paths use axum 0.8 syntax (`/{id}`, not `/:id`). Overlapping routes across
-  controllers are reported by axum itself (it panics while the router is assembled).
-- Handlers follow axum's rules: all extractors but the last implement `FromRequestParts`
-  (checked per parameter at compile time).
-- Optional dependencies (`Option<Arc<T>>`) and circular provider references are not supported;
-  cycles are rejected rather than lazily resolved.
-- Port syntax: implementations still carry `#[async_trait]` (a port with `async fn` needs it to be a
-  trait object), and `#[port]` traits cannot be generic. A scoped `provides` adapter
-  (`scope = request | transient`) has no lifecycle hooks, like any non-singleton. A `#[provider]` function generates a marker type with the function's name, so do not
-  also name a module or type the same in that scope. A provider function's error is converted with
-  `DiError::custom`, keeping the message but not the type.
-- Overriding a port whose adapter has lifecycle hooks still builds that adapter (its hooks need an
-  instance); adapters without hooks are skipped entirely.
+- Mounted routes are documented by hand (`RouteDoc`); there is no attribute to read them from.
+- Redis-backed tests need a local `redis-server`; set `REQUIRE_REDIS=1` (CI does) to fail instead of skipping.
+- The Redis queue `reserve` polls (50 ms) rather than blocking, so a push is picked up within about that long.
+- The CLI edits what it can parse and reports the rest; it does not reformat attribute arguments, so a long
+  `#[module(..)]` line stays long.
 
 ## Typed Server-Sent Events and a React client
 

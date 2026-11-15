@@ -43,36 +43,52 @@ async fn the_lock_is_shared_between_instances_and_expires() {
     );
 }
 
+const LEASE: Duration = Duration::from_millis(300);
+
 #[tokio::test]
-async fn work_is_fifo_and_reserved_work_is_hidden_until_settled() {
+async fn work_is_fifo_and_leased_work_is_hidden_until_settled() {
     let (_server, connection) = redis_or_skip!();
     let queue = RedisQueueBackend::new(connection);
     queue.push("q", job("a")).await.unwrap();
     queue.push("q", job("b")).await.unwrap();
     assert_eq!(queue.len("q").await.unwrap(), 2);
 
-    let first = queue.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
+    let first = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(first.envelope.id, "a");
-    assert_eq!(queue.len("q").await.unwrap(), 1, "reserved work is not waiting");
+    assert_eq!(queue.len("q").await.unwrap(), 1, "leased work is not waiting");
+    assert_eq!(queue.leased_len("q").await.unwrap(), 1);
 
     queue.ack("q", &first).await.unwrap();
-    let second = queue.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
+    let second = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(second.envelope.id, "b");
     queue.ack("q", &second).await.unwrap();
+    assert_eq!(queue.leased_len("q").await.unwrap(), 0);
 
     assert!(
-        queue.reserve("q", Duration::from_millis(100)).await.unwrap().is_none(),
+        queue
+            .reserve("q", Duration::from_millis(100), LEASE)
+            .await
+            .unwrap()
+            .is_none(),
         "empty waits then gives up"
     );
 }
 
 #[tokio::test]
-async fn a_blocked_reserve_wakes_when_work_arrives() {
+async fn a_waiting_reserve_picks_up_work_that_arrives() {
     let (_server, connection) = redis_or_skip!();
     let queue = std::sync::Arc::new(RedisQueueBackend::new(connection));
     let waiting = {
         let queue = queue.clone();
-        tokio::spawn(async move { queue.reserve("q", Duration::from_secs(5)).await })
+        tokio::spawn(async move { queue.reserve("q", Duration::from_secs(5), LEASE).await })
     };
     tokio::time::sleep(Duration::from_millis(150)).await;
     queue.push("q", job("late")).await.unwrap();
@@ -91,12 +107,20 @@ async fn retry_requeues_with_the_new_attempt_count_and_bury_keeps_it_for_inspect
     let queue = RedisQueueBackend::new(connection);
     queue.push("q", job("a")).await.unwrap();
 
-    let reserved = queue.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
+    let reserved = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
     let mut again = reserved.envelope.clone();
     again.attempts = 1;
     queue.retry("q", &reserved, again).await.unwrap();
 
-    let reserved = queue.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
+    let reserved = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(reserved.envelope.attempts, 1);
     queue.bury("q", &reserved).await.unwrap();
 
@@ -105,18 +129,65 @@ async fn retry_requeues_with_the_new_attempt_count_and_bury_keeps_it_for_inspect
 }
 
 #[tokio::test]
-async fn work_held_by_a_crashed_worker_comes_back_on_recovery() {
+async fn only_expired_leases_are_reaped_and_a_renewed_one_survives() {
     let (_server, connection) = redis_or_skip!();
-    let queue = RedisQueueBackend::new(connection.clone());
-    queue.push("q", job("a")).await.unwrap();
-    let _held_then_lost = queue.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
-    assert_eq!(queue.len("q").await.unwrap(), 0);
+    let queue = RedisQueueBackend::new(connection);
+    queue.push("q", job("dies")).await.unwrap();
+    queue.push("q", job("lives")).await.unwrap();
+    let dies = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+    let lives = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
 
-    // A fresh process starts and recovers.
-    let restarted = RedisQueueBackend::new(connection);
-    assert_eq!(restarted.recover("q").await.unwrap(), 1);
-    let reserved = restarted.reserve("q", Duration::from_secs(1)).await.unwrap().unwrap();
-    assert_eq!(reserved.envelope.id, "a");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(queue.renew("q", &lives, Duration::from_secs(5)).await.unwrap());
+    tokio::time::sleep(Duration::from_millis(200)).await; // `dies` is now past its lease
+
+    assert_eq!(queue.reap("q", 5).await.unwrap(), 1, "only the abandoned one");
+    assert_eq!(queue.leased_len("q").await.unwrap(), 1, "the renewed one is still held");
+    assert!(
+        !queue.renew("q", &dies, LEASE).await.unwrap(),
+        "a reaped lease cannot be renewed"
+    );
+
+    let back = queue
+        .reserve("q", Duration::from_secs(1), LEASE)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(back.envelope.id, "dies");
+    assert_eq!(back.envelope.attempts, 1, "the lost attempt counts");
+
+    // The dead worker's late ack must not erase the new holder's work.
+    queue.ack("q", &dies).await.unwrap();
+    assert_eq!(queue.leased_len("q").await.unwrap(), 2);
+    // ...and a late retry must not duplicate it.
+    queue.retry("q", &dies, dies.envelope.clone()).await.unwrap();
+    assert_eq!(queue.len("q").await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn work_that_keeps_killing_its_worker_is_buried_at_the_attempt_limit() {
+    let (_server, connection) = redis_or_skip!();
+    let queue = RedisQueueBackend::new(connection);
+    queue.push("q", job("poison")).await.unwrap();
+
+    for _ in 0..2 {
+        let _lost = queue
+            .reserve("q", Duration::from_secs(1), Duration::from_millis(50))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        queue.reap("q", 2).await.unwrap();
+    }
+    assert_eq!(queue.dead_len("q").await.unwrap(), 1);
+    assert_eq!(queue.len("q").await.unwrap(), 0);
 }
 
 #[tokio::test]

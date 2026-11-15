@@ -11,6 +11,14 @@ pub struct Server {
     pub port: u16,
 }
 
+/// With `REQUIRE_REDIS` set (CI), a missing `redis-server` fails the run instead of skipping it.
+fn missing(error: &std::io::Error) {
+    assert!(
+        std::env::var_os("REQUIRE_REDIS").is_none(),
+        "REQUIRE_REDIS is set but redis-server cannot be started: {error}"
+    );
+}
+
 impl Server {
     pub fn start() -> Option<Self> {
         let port = TcpListener::bind("127.0.0.1:0").ok()?.local_addr().ok()?.port();
@@ -32,6 +40,7 @@ impl Server {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
+            .inspect_err(missing)
             .ok()?;
         Some(Self { child, port })
     }

@@ -7,6 +7,7 @@
 //! |---|---|
 //! | [`naming`] | turns `invoice-line` into every spelling a template needs (and refuses bad names) |
 //! | [`templates`] | *pure*: a name in, a [`Plan`] of file operations out |
+//! | [`patch`] | edits existing Rust by parsing it (`syn` spans), never by matching text |
 //! | [`plan`] | the operations ([`Op`]) and how they are applied, safely and idempotently |
 //! | [`workspace`] | the [`Workspace`] port (read / write files) with disk and in-memory adapters |
 //! | [`commands`] | glues them: resolve names, build the plan, apply it, report |
@@ -18,6 +19,7 @@
 
 pub mod commands;
 pub mod naming;
+pub mod patch;
 pub mod plan;
 pub mod templates;
 pub mod workspace;

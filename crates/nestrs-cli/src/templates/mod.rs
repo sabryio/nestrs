@@ -2,9 +2,11 @@
 //! disk, so each is tested by reading the plan it returns.
 
 mod feature;
+mod jobs;
 mod project;
 
 pub use feature::feature;
+pub use jobs::{job, module, queue_handler};
 pub use project::{DependencySource, project};
 
 /// Replaces every `(token, value)` in `template`.

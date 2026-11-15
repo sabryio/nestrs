@@ -59,6 +59,7 @@ pub struct AppBuilder<M: Module> {
     overrides: Overrides,
     filters: Vec<FilterResolver>,
     merged: Vec<RouterFactory>,
+    mounted_docs: Vec<RouteDoc>,
     root: PhantomData<M>,
 }
 
@@ -113,7 +114,8 @@ impl<M: Module> AppBuilder<M> {
     ///
     /// What they do **not** get: `#[guard]`, `#[roles]`, route-level `#[interceptor]` (those are
     /// controller attributes; wrap the router in your own `route_layer`, or use `App::interceptor`
-    /// for something app-wide), and OpenAPI documentation (there is no `#[get]` to read it from).
+    /// for something app-wide, or use [`mount`](Self::mount), which adds them with a builder), and
+    /// OpenAPI documentation (there is no `#[get]` to read it from; `mount` takes it by hand).
     /// The unknown-route `404` stays nestrs's JSON envelope; a fallback on your router is replaced.
     ///
     /// # Panics
@@ -146,13 +148,23 @@ impl<M: Module> AppBuilder<M> {
         self
     }
 
+    /// Mounts a [`Mount`]: a raw router with guards, interceptors and OpenAPI docs added by builder
+    /// calls, in the same order a controller applies them (guards, interceptors, handler). Like
+    /// [`merge_with`](Self::merge_with) otherwise.
+    pub fn mount(mut self, mount: crate::Mount) -> Self {
+        let (build, mut docs) = mount.into_parts();
+        self.merged.push(build);
+        self.mounted_docs.append(&mut docs);
+        self
+    }
+
     /// Validates and builds the graph, then mounts every HTTP controller into one
     /// router. Unknown routes get the same JSON error envelope as every other failure.
     pub async fn build(self) -> Result<App, AppError> {
         let booted = bootstrap_with::<M>(self.overrides).await?;
 
         let mut router = Router::new();
-        let mut docs = Vec::new();
+        let mut docs = self.mounted_docs;
         for controller in booted.controllers {
             // Controllers for other transports are somebody else's business.
             if let Ok(mut routes) = controller.for_transport::<HttpTransport>() {
@@ -202,6 +214,7 @@ impl App {
             overrides: Overrides::new(),
             filters: Vec::new(),
             merged: Vec::new(),
+            mounted_docs: Vec::new(),
             root: PhantomData,
         }
     }

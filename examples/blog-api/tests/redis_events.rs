@@ -26,6 +26,14 @@ impl Drop for Redis {
     }
 }
 
+/// With `REQUIRE_REDIS` set (CI), a missing `redis-server` fails the run instead of skipping it.
+fn missing(error: &std::io::Error) {
+    assert!(
+        std::env::var_os("REQUIRE_REDIS").is_none(),
+        "REQUIRE_REDIS is set but redis-server cannot be started: {error}"
+    );
+}
+
 fn start_redis() -> Option<(Redis, String)> {
     let port = StdListener::bind("127.0.0.1:0").ok()?.local_addr().ok()?.port();
     let child = Command::new("redis-server")
@@ -33,6 +41,7 @@ fn start_redis() -> Option<(Redis, String)> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
+        .inspect_err(missing)
         .ok()?;
     Some((Redis(child), format!("redis://127.0.0.1:{port}/")))
 }

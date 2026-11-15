@@ -9,7 +9,7 @@ use std::path::Path;
 use std::process::Command;
 
 use nestrs_cli::DiskWorkspace;
-use nestrs_cli::commands::{Options, new_feature, new_project};
+use nestrs_cli::commands::{Options, new_feature, new_job, new_module, new_project, new_queue_handler};
 use nestrs_cli::templates::DependencySource;
 
 fn cargo(dir: &Path, target: &Path, args: &[&str]) {
@@ -42,6 +42,9 @@ fn a_generated_project_with_features_builds_tests_and_lints_clean() {
     new_project(&mut workspace, "shop-api", &source, Options::default()).unwrap();
     new_feature(&mut workspace, "invoice", None, Options::default()).unwrap();
     new_feature(&mut workspace, "category", None, Options::default()).unwrap();
+    new_module(&mut workspace, "billing", Options::default()).unwrap();
+    new_job(&mut workspace, "purge-drafts", Options::default()).unwrap();
+    new_queue_handler(&mut workspace, "send-welcome", Options::default()).unwrap();
 
     // Share the workspace's build cache so the dependencies are not compiled again.
     let target = repo.join("target");

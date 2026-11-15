@@ -43,7 +43,13 @@ pub struct HealthChecker {
 impl HealthChecker {
     /// Runs all checks and returns their results in registration order.
     pub async fn run(&self) -> Vec<CheckResult> {
-        join_all(self.indicators.iter().map(|indicator| self.run_one(indicator.as_ref()))).await
+        join_all(
+            self.indicators
+                .iter()
+                .filter(|indicator| indicator.enabled())
+                .map(|indicator| self.run_one(indicator.as_ref())),
+        )
+        .await
     }
 
     async fn run_one(&self, indicator: &dyn HealthIndicator) -> CheckResult {

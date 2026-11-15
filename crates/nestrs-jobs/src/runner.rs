@@ -24,6 +24,11 @@ pub struct JobsConfig {
     pub poll: Duration,
     /// Concurrent workers per queue handler.
     pub concurrency: usize,
+    /// How long a worker holds work before it counts as dead. Workers renew it every
+    /// third of this while they run, so it only has to outlast a stall, not a job.
+    pub lease: Duration,
+    /// How often expired leases are looked for and their work requeued.
+    pub reap_every: Duration,
 }
 
 impl Default for JobsConfig {
@@ -33,6 +38,8 @@ impl Default for JobsConfig {
             shutdown_grace: Duration::from_secs(10),
             poll: Duration::from_secs(1),
             concurrency: 1,
+            lease: Duration::from_secs(30),
+            reap_every: Duration::from_secs(5),
         }
     }
 }
@@ -68,17 +75,17 @@ impl OnModuleInit for JobRunner {
             tasks.spawn(run_schedule(job.clone(), self.lock.clone(), signal.clone()));
         }
         for handler in self.handlers.iter() {
-            let queue = handler.queue().to_owned();
-            match self.backend.recover(&queue).await {
-                Ok(0) => {}
-                Ok(count) => tracing::warn!(%queue, count, "requeued work left by a previous worker"),
-                Err(error) => return Err(DiError::custom(format!("cannot recover queue {queue:?}: {error}"))),
-            }
+            tasks.spawn(run_reaper(
+                handler.clone(),
+                self.backend.clone(),
+                self.config.reap_every,
+                signal.clone(),
+            ));
             for _ in 0..self.config.concurrency.max(1) {
                 tasks.spawn(run_worker(
                     handler.clone(),
                     self.backend.clone(),
-                    self.config.poll,
+                    (*self.config).clone(),
                     signal.clone(),
                 ));
             }
@@ -151,11 +158,33 @@ async fn run_schedule(job: Arc<dyn Job>, lock: Arc<crate::JobLockPort>, mut stop
     }
 }
 
+/// Puts expired leases back on the queue until `stop`.
+async fn run_reaper(
+    handler: Arc<dyn QueueHandler>,
+    backend: Arc<crate::QueueBackendPort>,
+    every: Duration,
+    mut stop: watch::Receiver<bool>,
+) {
+    let queue = handler.queue().to_owned();
+    loop {
+        tokio::select! {
+            biased;
+            _ = stop.wait_for(|stopped| *stopped) => return,
+            () = tokio::time::sleep(every) => {}
+        }
+        match backend.reap(&queue, handler.max_attempts()).await {
+            Ok(0) => {}
+            Ok(count) => tracing::warn!(%queue, count, "work whose worker stopped renewing its lease was returned"),
+            Err(error) => tracing::warn!(%queue, %error, "cannot reap expired leases"),
+        }
+    }
+}
+
 /// Consumes one queue until `stop`: reserve, handle, then ack, retry or bury.
 async fn run_worker(
     handler: Arc<dyn QueueHandler>,
     backend: Arc<crate::QueueBackendPort>,
-    poll: Duration,
+    config: JobsConfig,
     mut stop: watch::Receiver<bool>,
 ) {
     let queue = handler.queue().to_owned();
@@ -163,7 +192,7 @@ async fn run_worker(
         let reserved = tokio::select! {
             biased;
             _ = stop.wait_for(|stopped| *stopped) => return,
-            reserved = backend.reserve(&queue, poll) => reserved,
+            reserved = backend.reserve(&queue, config.poll, config.lease) => reserved,
         };
         let reserved = match reserved {
             Ok(Some(reserved)) => reserved,
@@ -172,13 +201,42 @@ async fn run_worker(
                 tracing::warn!(%queue, %error, "cannot reserve work; backing off");
                 tokio::select! {
                     _ = stop.wait_for(|stopped| *stopped) => return,
-                    () = tokio::time::sleep(poll) => continue,
+                    () = tokio::time::sleep(config.poll) => continue,
                 }
             }
         };
         // Work that has begun is finished even if shutdown arrives: the grace period,
         // not this loop, bounds it.
-        settle(&queue, handler.as_ref(), backend.as_ref(), reserved, &mut stop).await;
+        settle(&queue, handler.as_ref(), backend.as_ref(), &config, reserved, &mut stop).await;
+    }
+}
+
+/// Runs `work` while renewing the lease on `reserved`, so a long job is not mistaken for
+/// a dead worker. A lost lease is logged once; the work still runs to its end.
+async fn leased<T>(
+    queue: &str,
+    backend: &crate::QueueBackendPort,
+    reserved: &Reserved,
+    lease: Duration,
+    work: impl std::future::Future<Output = T>,
+) -> T {
+    tokio::pin!(work);
+    let mut ticker = tokio::time::interval((lease / 3).max(Duration::from_millis(1)));
+    ticker.tick().await; // the first tick is immediate
+    let mut warned = false;
+    loop {
+        tokio::select! {
+            result = &mut work => return result,
+            _ = ticker.tick() => match backend.renew(queue, reserved, lease).await {
+                Ok(true) => {}
+                Ok(false) if !warned => {
+                    warned = true;
+                    tracing::warn!(%queue, id = %reserved.envelope.id, "lease lost; this work may run elsewhere too");
+                }
+                Ok(false) => {}
+                Err(error) => tracing::warn!(%queue, %error, "cannot renew a lease"),
+            },
+        }
     }
 }
 
@@ -186,16 +244,17 @@ async fn settle(
     queue: &str,
     handler: &dyn QueueHandler,
     backend: &crate::QueueBackendPort,
+    config: &JobsConfig,
     reserved: Reserved,
     stop: &mut watch::Receiver<bool>,
 ) {
     let id = reserved.envelope.id.clone();
-    let attempt = AssertUnwindSafe(tokio::time::timeout(
+    let handled = AssertUnwindSafe(tokio::time::timeout(
         handler.timeout(),
         handler.handle(&reserved.envelope.payload),
     ))
-    .catch_unwind()
-    .await;
+    .catch_unwind();
+    let attempt = leased(queue, backend, &reserved, config.lease, handled).await;
     let outcome = match attempt {
         Ok(Ok(result)) => result,
         Ok(Err(_)) => Err(HandlerError::Retry("the attempt timed out".to_owned())),
@@ -214,11 +273,15 @@ async fn settle(
         }
         Err(HandlerError::Retry(reason)) => {
             tracing::warn!(%queue, %id, attempts, %reason, "attempt failed; will retry");
-            // Stay reserved while waiting, so a crash here is recovered, not lost; leave early on shutdown.
-            tokio::select! {
-                _ = stop.wait_for(|stopped| *stopped) => {}
-                () = tokio::time::sleep(handler.backoff(attempts)) => {}
-            }
+            // Keep the lease while waiting, so the reaper does not count the backoff as a
+            // crash; leave early on shutdown.
+            let wait = async {
+                tokio::select! {
+                    _ = stop.wait_for(|stopped| *stopped) => {}
+                    () = tokio::time::sleep(handler.backoff(attempts)) => {}
+                }
+            };
+            leased(queue, backend, &reserved, config.lease, wait).await;
             let envelope = Envelope {
                 attempts,
                 ..reserved.envelope.clone()
@@ -227,6 +290,6 @@ async fn settle(
         }
     };
     if let Err(error) = result {
-        tracing::error!(%queue, %id, %error, "cannot settle work; it stays reserved until recovery");
+        tracing::error!(%queue, %id, %error, "cannot settle work; its lease will expire and it will be reaped");
     }
 }

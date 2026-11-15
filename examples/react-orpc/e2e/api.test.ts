@@ -39,8 +39,8 @@ describe("REST through the contract", () => {
     expect(await api.health.live()).toEqual({ status: "ok" });
     const ready = await api.health.ready();
     expect(ready.status).toBe("ok");
-    // `redis` is reported even when unconfigured (healthy by definition, never critical).
-    expect(ready.checks.map((check) => check.name).sort()).toEqual(["database", "redis"]);
+    // `redis` only appears when BLOG_REDIS_URL is set.
+    expect(ready.checks.map((check) => check.name).sort()).toEqual(["database"]);
 
     const ada = await api.users.create({ name: "Ada", email: "ada@example.com" });
     expect(await api.users.find({ id: ada.id })).toEqual(ada);

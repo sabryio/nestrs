@@ -61,6 +61,62 @@ pub fn new_feature(
     Ok(templates::feature(&names, &lib).apply(workspace, options.force, options.dry_run)?)
 }
 
+/// Where the project already gets nestrs from, read from its `nestrs = ..` line, so a new
+/// dependency on a sibling crate follows the same source.
+fn jobs_dependency(manifest: &str) -> String {
+    for line in manifest.lines().map(str::trim) {
+        let Some(rest) = line.strip_prefix("nestrs") else {
+            continue;
+        };
+        let Some(spec) = rest.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let spec = spec.trim();
+        if let Some(from) = spec.find("path = \"") {
+            let path = &spec[from + 8..];
+            if let Some(end) = path.find('"') {
+                let root = path[..end].trim_end_matches("/crates/nestrs");
+                return format!("{{ path = \"{root}/crates/nestrs-jobs\" }}");
+            }
+        }
+        if spec.starts_with('"') {
+            return spec.to_owned();
+        }
+    }
+    "\"0.1\"".to_owned()
+}
+
+/// `nestrs generate module <name>`: an empty module imported by `AppModule`.
+pub fn new_module(workspace: &mut dyn Workspace, name: &str, options: Options) -> Result<Report, CliError> {
+    let names = Names::parse(name, None)?;
+    require_project(workspace)?;
+    Ok(templates::module(&names).apply(workspace, options.force, options.dry_run)?)
+}
+
+/// `nestrs generate job <name>`: a scheduled job, wired into `AppModule` with `JobsModule`.
+pub fn new_job(workspace: &mut dyn Workspace, name: &str, options: Options) -> Result<Report, CliError> {
+    let names = Names::parse(name, None)?;
+    let manifest = require_project(workspace)?;
+    Ok(templates::job(&names, &jobs_dependency(&manifest)).apply(workspace, options.force, options.dry_run)?)
+}
+
+/// `nestrs generate queue-handler <name>`: a queue consumer, wired like a job.
+pub fn new_queue_handler(workspace: &mut dyn Workspace, name: &str, options: Options) -> Result<Report, CliError> {
+    let names = Names::parse(name, None)?;
+    let manifest = require_project(workspace)?;
+    Ok(templates::queue_handler(&names, &jobs_dependency(&manifest)).apply(
+        workspace,
+        options.force,
+        options.dry_run,
+    )?)
+}
+
+fn require_project(workspace: &dyn Workspace) -> Result<String, CliError> {
+    workspace
+        .read(std::path::Path::new("Cargo.toml"))?
+        .ok_or(CliError::NotAProject)
+}
+
 /// The `name` in the `[package]` table.
 fn package_name(manifest: &str) -> Option<String> {
     let mut in_package = false;
@@ -102,6 +158,59 @@ mod tests {
             ws.get("tests/invoices.rs")
                 .unwrap()
                 .contains("use shop_api::AppModule;")
+        );
+    }
+
+    #[test]
+    fn a_job_adds_the_dependency_the_module_import_and_the_provider() {
+        let mut ws = MemoryWorkspace::new();
+        new_project(
+            &mut ws,
+            "shop",
+            &DependencySource::Path("/src/nestrs".into()),
+            Options::default(),
+        )
+        .unwrap();
+        let report = new_job(&mut ws, "purge-drafts", Options::default()).unwrap();
+
+        assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+        let cargo = ws.get("Cargo.toml").unwrap();
+        assert!(
+            cargo.contains("nestrs-jobs = { path = \"/src/nestrs/crates/nestrs-jobs\" }"),
+            "{cargo}"
+        );
+        let app = ws.get("src/composition/app.rs").unwrap();
+        assert!(app.contains("imports = [JobsModule::in_memory(), "), "{app}");
+        assert!(app.contains("providers = [PurgeDraftsJob]"), "{app}");
+        assert!(
+            app.contains("use nestrs_jobs::JobsModule;") && app.contains("use crate::application::PurgeDraftsJob;")
+        );
+
+        // A second job shares JobsModule and extends the providers.
+        new_queue_handler(&mut ws, "send-welcome", Options::default()).unwrap();
+        let app = ws.get("src/composition/app.rs").unwrap();
+        assert_eq!(app.matches("JobsModule::in_memory()").count(), 1, "{app}");
+        assert!(
+            app.contains("providers = [SendWelcomeHandler, PurgeDraftsJob]"),
+            "{app}"
+        );
+        assert!(syn::parse_file(app).is_ok());
+    }
+
+    #[test]
+    fn a_module_is_created_and_imported() {
+        let mut ws = MemoryWorkspace::new();
+        new_project(&mut ws, "shop", &source(), Options::default()).unwrap();
+        new_module(&mut ws, "billing", Options::default()).unwrap();
+        assert!(
+            ws.get("src/composition/app.rs")
+                .unwrap()
+                .contains("imports = [BillingModule, ")
+        );
+        assert!(
+            ws.get("src/composition/mod.rs")
+                .unwrap()
+                .contains("pub use billing_module::BillingModule;")
         );
     }
 

@@ -62,6 +62,17 @@ pub struct BodyDoc {
 }
 
 impl BodyDoc {
+    /// Documents a JSON body of type `T`, for routes that have no `#[get]`/`#[post]` to read it from.
+    pub fn of<T: ToSchema>() -> Self {
+        let mut schemas = vec![(T::name().into_owned(), T::schema())];
+        T::schemas(&mut schemas);
+        Self {
+            name: T::name().into_owned(),
+            schemas,
+            array: false,
+        }
+    }
+
     /// Documents the body as an array of this schema (`Vec<T>` bodies).
     pub fn into_array(mut self) -> Self {
         self.array = true;
@@ -152,6 +163,37 @@ impl RouteDoc {
             requirements: Vec::new(),
             validated: false,
         }
+    }
+
+    /// A route documented by hand (see `Mount`): `operation` becomes the operation id.
+    pub fn route(method: &'static str, path: impl Into<String>, operation: &'static str) -> Self {
+        Self::new(method, path.into(), operation, "Other").response(ResponseDoc::new(200, None))
+    }
+
+    /// `GET path`.
+    pub fn get(path: impl Into<String>, operation: &'static str) -> Self {
+        Self::route("get", path, operation)
+    }
+
+    /// `POST path`.
+    pub fn post(path: impl Into<String>, operation: &'static str) -> Self {
+        Self::route("post", path, operation)
+    }
+
+    /// `PUT path`.
+    pub fn put(path: impl Into<String>, operation: &'static str) -> Self {
+        Self::route("put", path, operation)
+    }
+
+    /// `DELETE path`.
+    pub fn delete(path: impl Into<String>, operation: &'static str) -> Self {
+        Self::route("delete", path, operation)
+    }
+
+    /// Groups the route under `tag` in the OpenAPI output (controllers use their name).
+    pub fn tagged(mut self, tag: &'static str) -> Self {
+        self.controller = tag;
+        self
     }
 
     /// Documents the handler's doc comment: first line is the summary.
@@ -265,6 +307,26 @@ impl<T: ToSchema> ViaToSchema for Probe<T> {
         })
     }
 }
+/// `G: Guard`: reports whether the guard lets anonymous callers through.
+pub trait ViaGuard {
+    /// `G::ANONYMOUS_OK`.
+    fn guard_anonymous_ok(&self) -> bool;
+}
+impl<G: crate::Guard> ViaGuard for Probe<G> {
+    fn guard_anonymous_ok(&self) -> bool {
+        G::ANONYMOUS_OK
+    }
+}
+/// Fallback for a type that is not a guard. The route's own `guarded(..)` call reports that
+/// error once, on the guard expression; this keeps the docs from reporting it a second time.
+pub trait WithoutGuard {
+    /// Not a guard: treated as requiring a caller.
+    fn guard_anonymous_ok(&self) -> bool {
+        false
+    }
+}
+impl<G> WithoutGuard for &Probe<G> {}
+
 /// Fallback: no schema available.
 pub trait WithoutToSchema {
     /// Documents nothing.
