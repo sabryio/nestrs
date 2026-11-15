@@ -1,7 +1,9 @@
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 
-use nestrs::{async_trait, port};
+use nestrs::port;
 use uuid::Uuid;
 
 use super::Post;
@@ -87,10 +89,9 @@ pub struct Sequenced {
 /// runtime: `next` resolves with the next event, or `None` once the feed is over.
 ///
 /// Contract: events arrive in cursor order, each at most once.
-#[async_trait]
 pub trait PostSubscription: Send {
     /// The next event, or `None` when the feed has ended.
-    async fn next(&mut self) -> Option<Sequenced>;
+    fn next(&mut self) -> Pin<Box<dyn Future<Output = Option<Sequenced>> + Send + '_>>;
 }
 
 /// Port: a replayable feed of post events.

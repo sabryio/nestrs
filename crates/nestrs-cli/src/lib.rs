@@ -12,6 +12,13 @@
 //! | [`workspace`] | the [`Workspace`] port (read / write files) with disk and in-memory adapters |
 //! | [`commands`] | glues them: resolve names, build the plan, apply it, report |
 //!
+//! ## Stability
+//!
+//! The supported interface of this crate is the `nestrs` command. The library exists so the
+//! engine can be tested and embedded in tooling, but it is **not covered by semver**: modules
+//! and signatures may change in any release. (The release workflow excludes it from the
+//! semver check for that reason.)
+//!
 //! Adding a generator means adding a function in [`templates`]; nothing else changes (OCP).
 //! Generators never touch the file system (DIP), so they are plain-data tests.
 

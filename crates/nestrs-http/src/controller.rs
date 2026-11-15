@@ -87,10 +87,10 @@ where
 /// chose (an error, an explicit status, a redirect) is left alone.
 pub fn with_default_status<R: IntoResponse>(status: u16, response: R) -> Response {
     let mut response = response.into_response();
-    if response.status() == StatusCode::OK {
-        if let Ok(status) = StatusCode::from_u16(status) {
-            *response.status_mut() = status;
-        }
+    if response.status() == StatusCode::OK
+        && let Ok(status) = StatusCode::from_u16(status)
+    {
+        *response.status_mut() = status;
     }
     response
 }

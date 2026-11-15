@@ -3,8 +3,8 @@
 
 use blog_api::AppModule;
 use blog_api::infrastructure::config::{AppConfig, Storage};
-use blog_api::infrastructure::persistence::Database;
 use nestrs::http::axum::http::StatusCode;
+use nestrs_sea_orm::Database;
 use nestrs_testing::TestApp;
 use sea_orm::ConnectionTrait;
 use serde_json::json;

@@ -1,0 +1,40 @@
+[package]
+name = "nestrs-sea-orm"
+description = "SeaORM for nestrs: a managed connection, migrations, per-request transactions and a health indicator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[features]
+# Pick the drivers you use; none are forced on you.
+sqlite = ["sea-orm/sqlx-sqlite", "sea-orm-migration/sqlx-sqlite"]
+postgres = ["sea-orm/sqlx-postgres", "sea-orm-migration/sqlx-postgres"]
+mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
+
+[dependencies]
+nestrs.workspace = true
+nestrs-health.workspace = true
+sea-orm = { version = "1", default-features = false, features = ["runtime-tokio-rustls"] }
+sea-orm-migration = { version = "1.1", default-features = false, features = ["runtime-tokio-rustls"] }
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+nestrs-testing.workspace = true
+serde_json.workspace = true
+sea-orm = { version = "1", default-features = false, features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
+sea-orm-migration = { version = "1.1", default-features = false, features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
+tokio = { workspace = true, features = ["test-util"] }
+tower.workspace = true
+
+[lints]
+workspace = true

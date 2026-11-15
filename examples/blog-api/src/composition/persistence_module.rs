@@ -1,15 +1,23 @@
 use nestrs::prelude::*;
+use nestrs_sea_orm::{Database, DatabaseConfig, SeaOrmModule, Transactional};
 
 use crate::domain::{PostRepositoryPort, UserRepositoryPort};
 use crate::infrastructure::config::{AppConfig, Storage};
 use crate::infrastructure::persistence::{
-    Database, DatabaseIndicator, InMemoryPostRepository, InMemoryUserRepository, SeaPostRepository, SeaUserRepository,
+    InMemoryPostRepository, InMemoryUserRepository, Migrator, SeaPostRepository, SeaUserRepository,
 };
 
-/// Connects the database (lifecycle hooks come with `Database`).
-#[provider]
-async fn database(config: Arc<AppConfig>) -> Result<Database, DiError> {
-    Database::connect(&config).await
+/// Derives the connection settings from the application's own configuration. In
+/// `Memory` mode the database is switched off, so the same module graph serves both modes.
+fn database_config() -> Provider {
+    Provider::factory::<DatabaseConfig>(vec![Token::of::<AppConfig>()], |container| {
+        Box::pin(async move {
+            let app = container.resolve::<AppConfig>()?;
+            Ok(DatabaseConfig::new(app.database_url.clone())
+                .enabled(app.storage == Storage::Database)
+                .migrate_on_start(app.migrate_on_start))
+        })
+    })
 }
 
 /// Picks the user repository adapter from `AppConfig::storage`.
@@ -30,16 +38,14 @@ fn post_repository(config: Arc<AppConfig>, database: Arc<Database>) -> PostRepos
     }
 }
 
-/// Binds the repository ports to adapters chosen by `AppConfig::storage`, and
-/// exports only the ports.
+/// Binds the repository ports to adapters chosen by `AppConfig::storage`.
 ///
-/// Importers get `UserRepositoryPort` and `PostRepositoryPort`; the concrete
-/// adapters stay private. The choice is made when the providers are built
-/// (configuration is itself a provider), so the same `AppModule` serves every
-/// storage mode. `Database` carries its own lifecycle hooks: it creates tables on
-/// init and closes the pool on shutdown, after the repositories are gone.
+/// Importers get the two ports and the [`Transactional`] interceptor; the concrete adapters
+/// stay private. The connection, its migrations, its readiness check and its shutdown come
+/// from `nestrs_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
 #[module(
-    providers = [database, user_repository, post_repository, DatabaseIndicator],
-    exports = [UserRepositoryPort, PostRepositoryPort],
+    imports = [SeaOrmModule::with_migrator::<Migrator>(database_config())],
+    providers = [user_repository, post_repository],
+    exports = [UserRepositoryPort, PostRepositoryPort, Transactional],
 )]
 pub struct PersistenceModule;

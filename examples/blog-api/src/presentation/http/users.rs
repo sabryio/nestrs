@@ -9,6 +9,7 @@ use crate::application::{GetUser, ListUsers, RegisterUser};
 use nestrs::http::BearerAuth;
 use nestrs_interceptors::{ETag, SecurityHeaders};
 use nestrs_kit::{PaginationPipe, RequestContext, TimingInterceptor};
+use nestrs_sea_orm::Transactional;
 
 /// HTTP surface of the users use cases: translate, delegate, translate back.
 #[injectable]
@@ -46,6 +47,7 @@ impl UsersController {
     #[roles("admin")]
     #[interceptor(RateLimit::per_minute(60).by(KeyBy::Caller))]
     #[interceptor(IdempotentWrites)]
+    #[interceptor(Transactional)]
     #[status(201)]
     #[response(409, "The email is already registered")]
     #[response(429, "Too many writes; see the Retry-After header")]

@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -136,30 +138,31 @@ struct Subscription {
     last: u64,
 }
 
-#[async_trait]
 impl PostSubscription for Subscription {
-    async fn next(&mut self) -> Option<Sequenced> {
-        loop {
-            let candidate = match self.backlog.pop_front() {
-                Some(event) => event,
-                None => match self.live.recv().await {
-                    Ok(event) => event,
-                    // Fell behind the channel: catch up from the history. Events
-                    // the history no longer holds are gone, and that is logged.
-                    Err(RecvError::Lagged(missed)) => {
-                        let feed = self.feed.upgrade()?;
-                        self.backlog = feed.history_after(self.last);
-                        tracing::warn!(missed, "event subscriber lagged; catching up from history");
-                        continue;
-                    }
-                    Err(RecvError::Closed) => return None,
-                },
-            };
-            if candidate.cursor.seq() > self.last {
-                self.last = candidate.cursor.seq();
-                return Some(candidate);
+    fn next(&mut self) -> Pin<Box<dyn Future<Output = Option<Sequenced>> + Send + '_>> {
+        Box::pin(async move {
+            loop {
+                let candidate = match self.backlog.pop_front() {
+                    Some(event) => event,
+                    None => match self.live.recv().await {
+                        Ok(event) => event,
+                        // Fell behind the channel: catch up from the history. Events
+                        // the history no longer holds are gone, and that is logged.
+                        Err(RecvError::Lagged(missed)) => {
+                            let feed = self.feed.upgrade()?;
+                            self.backlog = feed.history_after(self.last);
+                            tracing::warn!(missed, "event subscriber lagged; catching up from history");
+                            continue;
+                        }
+                        Err(RecvError::Closed) => return None,
+                    },
+                };
+                if candidate.cursor.seq() > self.last {
+                    self.last = candidate.cursor.seq();
+                    return Some(candidate);
+                }
             }
-        }
+        })
     }
 }
 

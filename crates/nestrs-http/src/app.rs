@@ -148,7 +148,7 @@ impl<M: Module> AppBuilder<M> {
         self
     }
 
-    /// Mounts a [`Mount`]: a raw router with guards, interceptors and OpenAPI docs added by builder
+    /// Mounts a [`Mount`](crate::Mount): a raw router with guards, interceptors and OpenAPI docs added by builder
     /// calls, in the same order a controller applies them (guards, interceptors, handler). Like
     /// [`merge_with`](Self::merge_with) otherwise.
     pub fn mount(mut self, mount: crate::Mount) -> Self {

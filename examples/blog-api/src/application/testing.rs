@@ -1,6 +1,8 @@
 //! Test doubles for the repository ports. Deliberately local to this layer: the
 //! application's tests must not depend on infrastructure.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -96,10 +98,9 @@ impl FakeEvents {
 
 struct Ended;
 
-#[async_trait]
 impl PostSubscription for Ended {
-    async fn next(&mut self) -> Option<Sequenced> {
-        None
+    fn next(&mut self) -> Pin<Box<dyn Future<Output = Option<Sequenced>> + Send + '_>> {
+        Box::pin(async { None })
     }
 }
 

@@ -6,10 +6,16 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [[bin]]
 name = "nestrs"
 path = "src/main.rs"
+doc = false
 
 [lib]
 name = "nestrs_cli"

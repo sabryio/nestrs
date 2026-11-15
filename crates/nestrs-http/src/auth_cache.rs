@@ -61,7 +61,7 @@ struct Entry {
     expires: Instant,
 }
 
-/// An [`Authenticator`] that consults `inner` only on a cache miss. See the [module docs](self).
+/// An [`Authenticator`] that consults `inner` only on a cache miss.
 pub struct CachedAuthenticator {
     inner: AuthenticatorPort,
     config: CacheConfig,

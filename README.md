@@ -68,7 +68,7 @@ async fn main() -> Result<(), AppError> {
 tests, no layering): `cargo run -p todo-minimal`. `examples/blog-api` is the same ideas organised as clean
 architecture with a database, config, OpenAPI and a fuller test suite.
 
-The workspace uses Rust **edition 2024** (MSRV 1.85) and **syn 3** for the macros.
+The workspace uses Rust **edition 2024** (MSRV 1.89) and **syn 3** for the macros.
 
 ## NestJS → nestrs
 
@@ -819,6 +819,8 @@ nestrs/
 │   ├── nestrs-redis/    RedisConnection, rate limit / cache / idempotency stores, RedisIndicator,
 │   │                    RedisEventStream, RedisJobLock, RedisQueueBackend, RedisValueStore
 │   ├── nestrs-jobs/     Job + Schedule (interval/cron), JobLock, Queue + QueueHandler + QueueBackend, JobsModule
+│   ├── nestrs-sea-orm/  Database (lifecycle), Executor, Transactional, UnitOfWork, Migrations port,
+│   │                    DatabaseIndicator, SeaOrmModule
 │   ├── nestrs-cache/    ValueStore port, MemoryValueStore, ServiceCache (single-flight read-through)
 │   ├── nestrs-cli/      the `nestrs` command: `new`, `generate feature` (pure templates, Workspace port)
 │   ├── nestrs-bench/    overhead benchmarks vs plain axum, full-stack soak test
@@ -841,8 +843,8 @@ nestrs/
     │   │                         DomainError / RepositoryError. No framework, no serde.
     │   ├── application/          use cases (RegisterUser, PublishPost, ..), TokenVerifier port,
     │   │                         ApplicationError. Plain structs with `new(..)`; fakes in testing.rs
-    │   ├── infrastructure/       adapters: persistence/ (in-memory + SeaORM repos, Database with
-    │   │                         init/destroy hooks, sea_orm/migrations/), auth.rs, config.rs, seed.rs
+    │   ├── infrastructure/       adapters: persistence/ (in-memory + SeaORM repos, entities and
+    │   │                         sea_orm/migrations/; the pool comes from nestrs-sea-orm), auth.rs, config.rs, seed.rs
     │   ├── presentation/http/    controllers, DTOs (ToSchema), kit Pagination -> domain Page,
     │   │                         ApplicationError -> HttpError
     │   └── composition/          nestrs modules: Persistence (picks adapters from config), Auth,
@@ -889,23 +891,64 @@ curl -X POST localhost:3000/api/users \
      -d '{"name":"Ada","email":"ada@example.com"}'
 ```
 
-## Database migrations
+## Database: nestrs-sea-orm
 
-The SeaORM adapter uses `sea-orm-migration`. Migrations live in
-`infrastructure/persistence/sea_orm/migrations/`, one file per change, registered in `Migrator`. Each runs
-once per database and is recorded in `seaql_migrations`.
+`nestrs-sea-orm` is the persistence kit: the part of "use SeaORM" that is the same in every service.
 
-- `Database` applies pending migrations in its `#[on_init]` hook, before anything uses the repositories.
-  Set `migrate_on_start = false` (`BLOG_MIGRATE_ON_START=false`) when migrations are a separate deployment
-  step, then call `Database::migrate()` yourself.
+| Piece | Job |
+|---|---|
+| `DatabaseConfig` | how to connect; deserialisable, builder methods, `enabled(false)` runs without a database |
+| `Database` | the pool as a provider: connects, applies migrations on init, closes at shutdown |
+| `Executor` | the pool *or* the request's transaction; implements `ConnectionTrait`, so `Entity::find().one(&db)` works |
+| `Transactional` | interceptor: one transaction per request |
+| `UnitOfWork`, `Database::in_transaction` | explicit transactions for jobs and scripts |
+| `Migrations`, `SeaMigrator<M>` | the migration port and its adapter for a `sea-orm-migration` migrator |
+| `DatabaseIndicator` | the `database` readiness check |
+| `SeaOrmModule` | wires all of it |
+
+```rust
+#[module(
+    imports = [SeaOrmModule::with_migrator::<Migrator>(database_config())],
+    providers = [user_repository, post_repository],
+    exports = [UserRepositoryPort, PostRepositoryPort, Transactional],
+)]
+pub struct PersistenceModule;
+
+// A repository never knows whether a transaction is active:
+let db = self.database.executor().await?;
+user::Entity::insert(row).exec(&db).await?;
+
+// Atomic writes: add the interceptor to the route.
+#[post]
+#[interceptor(Transactional)]
+async fn create(&self, ..) -> Result<.., HttpError> { .. }
+```
+
+How transactions behave:
+
+- The transaction opens **lazily**, the first time a repository asks for an `Executor`, so routes that
+  never touch the database send no `BEGIN`.
+- A `2xx`/`3xx` response **commits**; a `4xx` or `5xx` **rolls back**. Returning an error from a
+  handler undoes its writes with no code for it. If the commit itself fails the client gets a `500`.
+- It lives in a Tokio task-local, so it follows the request. Work moved to `tokio::spawn` does not see
+  it and uses the pool.
+- `Database::in_transaction` inside such a request joins the request's transaction; outside one it
+  begins, commits on `Ok` and rolls back on `Err`.
+- With in-memory SQLite the pool has one connection, so other users of the database wait while a
+  transaction is open. Real databases have no such limit.
+
+Migrations live in your crate (`infrastructure/persistence/sea_orm/migrations/`, one file per change,
+registered in `Migrator`) and run once per database, recorded in `seaql_migrations`.
+
+- `Database` applies pending migrations in its init hook, before anything uses the repositories. Set
+  `migrate_on_start(false)` (the blog: `BLOG_MIGRATE_ON_START=false`) when migrations are a separate
+  deployment step, then call `Database::migrate()` yourself.
 - `Database::roll_back(n)` reverts the last `n` migrations; `applied_migrations()` lists what ran.
-- A database created before migrations existed adopts them in place: the first migrations use
-  `if_not_exists`, so existing tables and their data are kept.
-- `posts.author_id` has a foreign key to `users` and an index, which the old create-from-entity code
-  never had.
-- `tests/migrations.rs` covers SQLite (restart, rollback and re-apply, legacy adoption, switched off). Set
-  `BLOG_TEST_POSTGRES_URL=postgres://user@host/db` to run the same migrations on a real Postgres; that test
-  resets the database it is given, so point it at a scratch one.
+- `tests/migrations.rs` in the blog covers SQLite (restart, rollback and re-apply, legacy adoption,
+  switched off). Set `BLOG_TEST_POSTGRES_URL=postgres://user@host/db` to run the same migrations on a
+  real Postgres; that test resets the database it is given, so point it at a scratch one.
+
+The crate enables no driver; turn on its `sqlite`, `postgres` or `mysql` feature.
 
 ## Known limits
 
@@ -914,6 +957,7 @@ once per database and is recorded in `seaql_migrations`.
 - The Redis queue `reserve` polls (50 ms) rather than blocking, so a push is picked up within about that long.
 - The CLI edits what it can parse and reports the rest; it does not reformat attribute arguments, so a long
   `#[module(..)]` line stays long.
+- `Transactional` is per request task; spawned tasks use the pool (see above).
 
 ## Typed Server-Sent Events and a React client
 

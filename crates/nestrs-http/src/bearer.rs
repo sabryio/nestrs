@@ -66,7 +66,7 @@ pub trait Authenticator: Send + Sync + 'static {
 /// Shared handle to the registered [`Authenticator`].
 pub type AuthenticatorPort = Arc<dyn Authenticator>;
 
-/// Guard: requires a valid bearer token. See the [module docs](self).
+/// Guard: requires a valid bearer token.
 pub struct BearerAuth {
     authenticator: AuthenticatorPort,
 }

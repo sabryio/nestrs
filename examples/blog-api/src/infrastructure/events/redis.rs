@@ -1,3 +1,6 @@
+use std::future::Future;
+use std::pin::Pin;
+
 use nestrs::prelude::*;
 use nestrs_redis::{RedisConnection, RedisEventStream, StreamId, StreamSubscription};
 use serde::{Deserialize, Serialize};
@@ -106,26 +109,27 @@ struct Subscription {
     inner: Option<StreamSubscription>,
 }
 
-#[async_trait]
 impl PostSubscription for Subscription {
-    async fn next(&mut self) -> Option<Sequenced> {
-        let inner = self.inner.as_mut()?;
-        loop {
-            let entry = inner.next().await?;
-            let decoded = serde_json::from_slice::<Wire>(&entry.payload)
-                .ok()
-                .and_then(Wire::into_event);
-            match decoded {
-                Some(event) => {
-                    return Some(Sequenced {
-                        cursor: EventCursor::new(entry.id.ms, entry.id.seq),
-                        event,
-                    });
+    fn next(&mut self) -> Pin<Box<dyn Future<Output = Option<Sequenced>> + Send + '_>> {
+        Box::pin(async move {
+            let inner = self.inner.as_mut()?;
+            loop {
+                let entry = inner.next().await?;
+                let decoded = serde_json::from_slice::<Wire>(&entry.payload)
+                    .ok()
+                    .and_then(Wire::into_event);
+                match decoded {
+                    Some(event) => {
+                        return Some(Sequenced {
+                            cursor: EventCursor::new(entry.id.ms, entry.id.seq),
+                            event,
+                        });
+                    }
+                    // A bad entry must not end every client's stream: skip it and say so.
+                    None => tracing::warn!(id = %entry.id, "skipping an undecodable event"),
                 }
-                // A bad entry must not end every client's stream: skip it and say so.
-                None => tracing::warn!(id = %entry.id, "skipping an undecodable event"),
             }
-        }
+        })
     }
 }
 

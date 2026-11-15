@@ -123,16 +123,13 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> syn::Result<TokenStream> {
 
 /// `Result<T, E>` -> (`T`, true); anything else -> (itself, false).
 fn unwrap_result(ty: &Type) -> (Type, bool) {
-    if let Type::Path(path) = ty {
-        if let Some(segment) = path.path.segments.last() {
-            if segment.ident == "Result" {
-                if let PathArguments::AngleBracketed(arguments) = &segment.arguments {
-                    if let Some(GenericArgument::Type(ok)) = arguments.args.first() {
-                        return (ok.clone(), true);
-                    }
-                }
-            }
-        }
+    if let Type::Path(path) = ty
+        && let Some(segment) = path.path.segments.last()
+        && segment.ident == "Result"
+        && let PathArguments::AngleBracketed(arguments) = &segment.arguments
+        && let Some(GenericArgument::Type(ok)) = arguments.args.first()
+    {
+        return (ok.clone(), true);
     }
     (ty.clone(), false)
 }

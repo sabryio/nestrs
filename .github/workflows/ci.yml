@@ -22,3 +22,34 @@ jobs:
       - run: cargo test --workspace
       # Builds a generated project (modules, features, jobs) and lints it.
       - run: cargo test -p nestrs-cli -- --ignored
+
+  # The declared rust-version must be the real one: build with exactly that toolchain.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --locked --exclude nestrs-bench
+
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --workspace --no-deps --exclude nestrs-bench
+
+  # Compares the public API with the last published release. Skipped until one exists.
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          exclude: nestrs-bench,nestrs-cli,blog-api,todo-minimal
+        continue-on-error: true  # remove once the first release is on crates.io

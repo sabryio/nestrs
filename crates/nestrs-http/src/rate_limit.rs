@@ -167,7 +167,7 @@ impl RateLimitStore for MemoryStore {
             let now = Instant::now();
             let mut state = self.lock();
             state.hits += 1;
-            if state.hits % SWEEP_EVERY == 0 {
+            if state.hits.is_multiple_of(SWEEP_EVERY) {
                 state.tats.retain(|_, tat| *tat > now);
             }
 
@@ -228,7 +228,7 @@ impl std::fmt::Debug for KeyBy {
 /// Process-wide counter naming limiters that were not given a [`scope`](RateLimit::scope).
 static NEXT_SCOPE: AtomicU64 = AtomicU64::new(1);
 
-/// Limits how often a client may call a route: see the [module docs](self).
+/// Limits how often a client may call a route.
 #[derive(Clone)]
 pub struct RateLimit {
     limit: u32,

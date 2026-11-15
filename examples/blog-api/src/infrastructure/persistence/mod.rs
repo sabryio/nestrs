@@ -6,4 +6,4 @@ mod sea_orm;
 
 pub use memory_posts::InMemoryPostRepository;
 pub use memory_users::InMemoryUserRepository;
-pub use sea_orm::{Database, DatabaseIndicator, Migrator, SeaPostRepository, SeaUserRepository};
+pub use sea_orm::{Migrator, SeaPostRepository, SeaUserRepository};

@@ -332,13 +332,13 @@ impl Stream for Terminating {
         if this.done {
             return Poll::Ready(None);
         }
-        if let Some(notified) = this.notified.as_mut() {
-            if notified.as_mut().poll(cx).is_ready() {
-                this.done = true;
-                this.notified = None;
-                let _ = &this.shutdown;
-                return Poll::Ready(Some(Ok(Bytes::from_static(CLOSE.as_bytes()))));
-            }
+        if let Some(notified) = this.notified.as_mut()
+            && notified.as_mut().poll(cx).is_ready()
+        {
+            this.done = true;
+            this.notified = None;
+            let _ = &this.shutdown;
+            return Poll::Ready(Some(Ok(Bytes::from_static(CLOSE.as_bytes()))));
         }
         match this.inner.poll_next_unpin(cx) {
             Poll::Ready(None) => {

@@ -21,28 +21,18 @@ nestrs-health.workspace = true
 nestrs-interceptors.workspace = true
 nestrs-kit.workspace = true
 nestrs-redis.workspace = true
+nestrs-sea-orm = { workspace = true, features = ["sqlite", "postgres"] }
 utoipa.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
-sea-orm = { version = "2.0.4", default-features = false, features = [
-    "macros",
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-    "sqlx-sqlite",
-    "with-uuid",
-] }
+sea-orm = { version = "1", default-features = false, features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "with-uuid"] }
 async-trait = "0.1"
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 validator.workspace = true
-sea-orm-migration = { version = "2.0.4", default-features = false, features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-    "sqlx-sqlite",
-] }
-parking_lot = "0.13.0"
+sea-orm-migration = { version = "1.1", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
 
 [dev-dependencies]
 nestrs-testing.workspace = true
