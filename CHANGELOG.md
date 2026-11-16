@@ -17,6 +17,10 @@ All crates in the workspace share one version and are released together.
 - **`nestrs-sea-orm`**: managed SeaORM connection with lifecycle hooks, migrations behind a port,
   health indicator, `Executor`, per-request `Transactional` interceptor, `UnitOfWork` and
   `Database::in_transaction`. The blog example uses it instead of its own wrapper.
+- **`nestrs-outbox`**: transactional outbox. `Outbox` records events through the request's
+  transaction; `OutboxRelay` delivers at least once with per-key ordering, exponential back-off, dead
+  letters and lease-based claims; `SeaOutboxStore`, `MemoryOutboxStore`, `QueuePublisher`,
+  `CreateOutbox`, `OutboxModule`. The blog announces published posts through it.
 - Crate metadata (keywords, categories, homepage, readme), license files and a README for every
   published crate.
 - `RELEASING.md`, a release workflow that publishes in dependency order, and CI jobs for MSRV,

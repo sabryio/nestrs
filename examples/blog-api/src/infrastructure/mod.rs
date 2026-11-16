@@ -6,6 +6,7 @@
 //! Depends on `domain` and `application` (to implement their ports), never on
 //! `presentation` or `composition`.
 
+pub mod announcements;
 pub mod auth;
 pub mod config;
 pub mod events;

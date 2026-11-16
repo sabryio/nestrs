@@ -1,7 +1,9 @@
 use nestrs::prelude::*;
+use nestrs_outbox::{OutboxStorePort, SeaOutboxStore};
 use nestrs_sea_orm::{Database, DatabaseConfig, SeaOrmModule, Transactional};
 
-use crate::domain::{PostRepositoryPort, UserRepositoryPort};
+use crate::domain::{PostAnnouncementsPort, PostRepositoryPort, UserRepositoryPort};
+use crate::infrastructure::announcements::{NoAnnouncements, OutboxPostAnnouncements};
 use crate::infrastructure::config::{AppConfig, Storage};
 use crate::infrastructure::persistence::{
     InMemoryPostRepository, InMemoryUserRepository, Migrator, SeaPostRepository, SeaUserRepository,
@@ -38,6 +40,16 @@ fn post_repository(config: Arc<AppConfig>, database: Arc<Database>) -> PostRepos
     }
 }
 
+/// Memory mode announces nothing; database mode records announcements in the outbox, inside
+/// the request's transaction.
+#[provider]
+fn post_announcements(config: Arc<AppConfig>, database: Arc<Database>) -> PostAnnouncementsPort {
+    match config.storage {
+        Storage::Memory => Arc::new(NoAnnouncements),
+        Storage::Database => Arc::new(OutboxPostAnnouncements::new(database)),
+    }
+}
+
 /// Binds the repository ports to adapters chosen by `AppConfig::storage`.
 ///
 /// Importers get the two ports and the [`Transactional`] interceptor; the concrete adapters
@@ -45,7 +57,7 @@ fn post_repository(config: Arc<AppConfig>, database: Arc<Database>) -> PostRepos
 /// from `nestrs_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
 #[module(
     imports = [SeaOrmModule::with_migrator::<Migrator>(database_config())],
-    providers = [user_repository, post_repository],
-    exports = [UserRepositoryPort, PostRepositoryPort, Transactional],
+    providers = [user_repository, post_repository, post_announcements, SeaOutboxStore],
+    exports = [UserRepositoryPort, PostRepositoryPort, PostAnnouncementsPort, OutboxStorePort, Transactional],
 )]
 pub struct PersistenceModule;

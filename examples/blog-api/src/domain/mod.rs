@@ -5,6 +5,7 @@
 //! application depends on this module, never the reverse (enforced by
 //! `tests/architecture.rs`).
 
+mod announcements;
 mod error;
 mod events;
 mod page;
@@ -12,6 +13,7 @@ mod post;
 mod repository;
 mod user;
 
+pub use announcements::{PostAnnouncements, PostAnnouncementsPort};
 pub use error::{DomainError, RepositoryError};
 pub use events::{EventCursor, InvalidCursor, PostEvent, PostEvents, PostEventsPort, PostSubscription, Sequenced};
 pub use page::Page;

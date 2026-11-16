@@ -17,6 +17,8 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20261110_000001_create_users::Migration),
             Box::new(m20261110_000002_create_posts::Migration),
+            // The outbox table that `OutboxPostAnnouncements` writes to.
+            Box::new(nestrs_outbox::CreateOutbox),
         ]
     }
 }

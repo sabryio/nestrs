@@ -9,7 +9,11 @@ use nestrs_testing::TestApp;
 use sea_orm::ConnectionTrait;
 use serde_json::json;
 
-const ALL: [&str; 2] = ["m20261110_000001_create_users", "m20261110_000002_create_posts"];
+const ALL: [&str; 3] = [
+    "m20261110_000001_create_users",
+    "m20261110_000002_create_posts",
+    "m20261115_000001_create_nestrs_outbox",
+];
 
 /// A SQLite file that is removed when the test ends.
 struct TempDb(std::path::PathBuf);
@@ -83,9 +87,9 @@ async fn migrations_can_be_rolled_back_and_applied_again() {
     let database = app.resolve::<Database>();
 
     database.roll_back(1).await.unwrap();
-    assert_eq!(database.applied_migrations().await.unwrap(), &ALL[..1]);
+    assert_eq!(database.applied_migrations().await.unwrap(), &ALL[..2]);
 
-    database.roll_back(1).await.unwrap();
+    database.roll_back(2).await.unwrap();
     assert!(database.applied_migrations().await.unwrap().is_empty());
 
     database.migrate().await.unwrap();

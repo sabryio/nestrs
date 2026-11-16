@@ -6,6 +6,7 @@
 
 mod app;
 mod auth_module;
+mod messaging_module;
 mod persistence_module;
 mod posts_module;
 mod seed_module;
@@ -14,6 +15,7 @@ mod users_module;
 
 pub use app::AppModule;
 pub use auth_module::AuthModule;
+pub use messaging_module::{MessagingModule, outbox_relay};
 pub use persistence_module::PersistenceModule;
 pub use posts_module::PostsModule;
 pub use seed_module::SeedModule;

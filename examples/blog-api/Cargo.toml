@@ -19,7 +19,9 @@ path = "src/main.rs"
 nestrs.workspace = true
 nestrs-health.workspace = true
 nestrs-interceptors.workspace = true
+nestrs-jobs.workspace = true
 nestrs-kit.workspace = true
+nestrs-outbox.workspace = true
 nestrs-redis.workspace = true
 nestrs-sea-orm = { workspace = true, features = ["sqlite", "postgres"] }
 utoipa.workspace = true

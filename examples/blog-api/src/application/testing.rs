@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::domain::{
-    Email, EventCursor, Page, Post, PostEvent, PostEvents, PostRepository, PostSubscription, RepositoryError,
-    Sequenced, User, UserRepository,
+    Email, EventCursor, Page, Post, PostAnnouncements, PostEvent, PostEvents, PostRepository, PostSubscription,
+    RepositoryError, Sequenced, User, UserRepository,
 };
 
 #[derive(Default)]
@@ -111,5 +111,38 @@ impl PostEvents for FakeEvents {
     }
     async fn subscribe(&self, _after: Option<EventCursor>) -> Box<dyn PostSubscription> {
         Box::new(Ended)
+    }
+}
+
+/// Records which posts were announced, or fails on demand.
+#[derive(Default)]
+pub(crate) struct FakeAnnouncements {
+    announced: Mutex<Vec<Uuid>>,
+    fail: bool,
+}
+
+impl FakeAnnouncements {
+    /// An announcer whose every call fails.
+    pub(crate) fn failing() -> Self {
+        Self {
+            fail: true,
+            ..Self::default()
+        }
+    }
+
+    /// Ids of the announced posts, oldest first.
+    pub(crate) fn announced(&self) -> Vec<Uuid> {
+        self.announced.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl PostAnnouncements for FakeAnnouncements {
+    async fn post_published(&self, post: &Post) -> Result<(), RepositoryError> {
+        if self.fail {
+            return Err(RepositoryError::Unavailable("fake outage".to_owned()));
+        }
+        self.announced.lock().unwrap().push(post.id());
+        Ok(())
     }
 }

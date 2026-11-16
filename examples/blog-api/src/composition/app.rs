@@ -1,7 +1,9 @@
 use nestrs::prelude::*;
 use nestrs_kit::KitModule;
 
-use super::{PersistenceModule, PostsModule, SeedModule, SharedStateModule, UsersModule};
+use super::{
+    MessagingModule, PersistenceModule, PostsModule, SeedModule, SharedStateModule, UsersModule, outbox_relay,
+};
 use crate::infrastructure::config::AppConfig;
 use nestrs::config::{ConfigModule, ConfigSource};
 use nestrs_health::HealthModule;
@@ -17,6 +19,8 @@ use nestrs_health::HealthModule;
         KitModule,
         HealthModule,
         PersistenceModule,
+        MessagingModule,
+        outbox_relay(),
         SharedStateModule,
         UsersModule,
         PostsModule,

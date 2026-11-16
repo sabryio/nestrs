@@ -821,6 +821,8 @@ nestrs/
 │   ├── nestrs-jobs/     Job + Schedule (interval/cron), JobLock, Queue + QueueHandler + QueueBackend, JobsModule
 │   ├── nestrs-sea-orm/  Database (lifecycle), Executor, Transactional, UnitOfWork, Migrations port,
 │   │                    DatabaseIndicator, SeaOrmModule
+│   ├── nestrs-outbox/   Outbox (in-transaction writer), OutboxStore/Publisher ports, OutboxRelay,
+│   │                    SeaOutboxStore, CreateOutbox, QueuePublisher, OutboxModule
 │   ├── nestrs-cache/    ValueStore port, MemoryValueStore, ServiceCache (single-flight read-through)
 │   ├── nestrs-cli/      the `nestrs` command: `new`, `generate feature` (pure templates, Workspace port)
 │   ├── nestrs-bench/    overhead benchmarks vs plain axum, full-stack soak test
@@ -949,6 +951,60 @@ registered in `Migrator`) and run once per database, recorded in `seaql_migratio
   real Postgres; that test resets the database it is given, so point it at a scratch one.
 
 The crate enables no driver; turn on its `sqlite`, `postgres` or `mysql` feature.
+
+## Transactional outbox: nestrs-outbox
+
+Publishing an event after committing (or before) is a dual write: a crash between the two loses the
+event or announces something that never happened. The outbox records the event **in the same
+transaction** as the data, and a relay delivers it afterwards.
+
+```text
+request ── BEGIN ── INSERT post ── INSERT outbox row ── COMMIT          (atomic)
+                                                          │
+relay   ── claim ── publish ── delete row  ◄───────────────┘          (at least once)
+```
+
+```rust
+// In an adapter, through the executor of the current request (inside `Transactional`):
+let db = self.database.executor().await?;
+Outbox.record_json(&db, "post.published", Some(&post.id().to_string()), &announcement).await?;
+
+// A consumer deduplicates on the message id, which never changes across redeliveries:
+let envelope: OutboxEnvelope<PostPublished> = decode(payload)?;
+if self.announced.record(&envelope.id, envelope.payload) { /* first time */ }
+```
+
+| Piece | Job |
+|---|---|
+| `Outbox` | records a message with any `Executor` (so it joins your transaction) |
+| `CreateOutbox` | the migration; add it to your `Migrator` |
+| `OutboxStore` / `SeaOutboxStore` / `MemoryOutboxStore` | the relay's port, its SeaORM adapter, and a test double |
+| `OutboxPublisher` / `QueuePublisher` | where messages go; the adapter feeds a `nestrs-jobs` queue named after the topic |
+| `OutboxRelay` | claims, publishes, retries with back-off, buries; stops within `shutdown_grace` |
+| `OutboxModule::for_root` / `with_config` | wires the relay; it imports the modules that provide the two ports |
+
+Guarantees and their limits:
+
+- A message exists if and only if its transaction committed. Rolling back the request (any `4xx`/`5xx`)
+  removes it with the rest.
+- At least once. Consumers must be idempotent; `OutboxEnvelope` carries the stable message id.
+- Messages with one **key** are delivered one at a time, in recording order, and a failing message
+  blocks its key until it succeeds or is buried. Messages without a key never wait for each other.
+  There is no ordering across keys, and no ordering for one key recorded by concurrent transactions
+  (the order is the database sequence, not commit order): record them from code that already serialises
+  writes to that aggregate.
+- Latency from commit to delivery is at most `poll_interval` (500 ms default), plus the consumer.
+- Claims have a lease (`lease`, 60 s). A relay that dies is replaced after it; one that is merely slow
+  can cause a duplicate, never a loss. Several relays can run against one database: the claim update is
+  guarded, so no row is claimed twice, and it uses no `SKIP LOCKED`, so it runs on SQLite, Postgres and
+  MySQL alike.
+- Delivered rows are deleted. Buried ones stay (`OutboxStore::dead_len`, `requeue_dead`). `RelayStats`
+  exposes published / retried / buried counters.
+- `MemoryOutboxStore` is for tests: it is not transactional, which is the one thing an outbox is for.
+
+In the blog, publishing a post in database mode records `post.published` through
+`OutboxPostAnnouncements`; `PostPublishedHandler` consumes it from the queue. In memory mode a
+`NoAnnouncements` adapter is used and the relay is switched off.
 
 ## Known limits
 

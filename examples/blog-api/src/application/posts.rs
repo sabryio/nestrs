@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use super::ApplicationError;
 use crate::domain::{
-    EventCursor, Page, Post, PostBody, PostEvent, PostEventsPort, PostRepositoryPort, PostSubscription, PostTitle,
-    UserRepositoryPort,
+    EventCursor, Page, Post, PostAnnouncementsPort, PostBody, PostEvent, PostEventsPort, PostRepositoryPort,
+    PostSubscription, PostTitle, UserRepositoryPort,
 };
 
 /// Input of [`PublishPost`].
@@ -27,6 +27,7 @@ pub struct PublishPost {
     posts: PostRepositoryPort,
     users: UserRepositoryPort,
     events: PostEventsPort,
+    announcements: PostAnnouncementsPort,
 }
 
 impl PublishPost {
@@ -39,6 +40,7 @@ impl PublishPost {
         }
         let post = Post::publish(command.author_id, title, body);
         self.posts.insert(post.clone()).await?;
+        self.announcements.post_published(&post).await?;
         self.events.publish(PostEvent::Published(post.clone()));
         Ok(post)
     }
@@ -109,7 +111,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::application::testing::{FakeEvents, FakePosts, FakeUsers};
+    use crate::application::testing::{FakeAnnouncements, FakeEvents, FakePosts, FakeUsers};
     use crate::domain::{DomainError, Email, PostEvent, User, UserName, UserRepository};
 
     async fn seeded() -> (Arc<FakeUsers>, Arc<FakePosts>, User) {
@@ -138,6 +140,7 @@ mod tests {
             posts: posts.clone(),
             users,
             events: events.clone(),
+            announcements: Arc::new(FakeAnnouncements::default()),
         }
         .execute(command(author.id(), "  Hello  ", "World"))
         .await
@@ -178,6 +181,7 @@ mod tests {
             posts,
             users,
             events: events.clone(),
+            announcements: Arc::new(FakeAnnouncements::default()),
         }
         .execute(command(ghost, "Hello", "World"))
         .await
@@ -193,6 +197,7 @@ mod tests {
             posts: posts.clone(),
             users,
             events: Arc::new(FakeEvents::default()),
+            announcements: Arc::new(FakeAnnouncements::default()),
         };
         assert_eq!(
             publish.execute(command(author.id(), "", "body")).await.unwrap_err(),
@@ -203,5 +208,34 @@ mod tests {
             ApplicationError::Invalid(DomainError::EmptyPostBody)
         );
         assert!(ListPosts { posts }.execute(Page::default()).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_published_post_is_announced_and_a_failed_announcement_fails_the_publish() {
+        let (users, posts, author) = seeded().await;
+        let announcements = Arc::new(FakeAnnouncements::default());
+        let events = Arc::new(FakeEvents::default());
+        let publish = PublishPost {
+            posts: posts.clone(),
+            users: users.clone(),
+            events: events.clone(),
+            announcements: announcements.clone(),
+        };
+        let post = publish.execute(command(author.id(), "Hello", "World")).await.unwrap();
+        assert_eq!(announcements.announced(), [post.id()]);
+
+        let broken = PublishPost {
+            posts,
+            users,
+            events: events.clone(),
+            announcements: Arc::new(FakeAnnouncements::failing()),
+        };
+        assert!(matches!(
+            broken.execute(command(author.id(), "Second", "Post")).await,
+            Err(ApplicationError::Repository(
+                crate::domain::RepositoryError::Unavailable(_)
+            ))
+        ));
+        assert_eq!(events.published().len(), 1, "no live event for a publish that failed");
     }
 }
