@@ -19,6 +19,12 @@ pub enum CliError {
     /// `generate` was run outside a nestrs project.
     #[error("no Cargo.toml here: run this inside a project created by `nestrs new`")]
     NotAProject,
+    /// Contract generation failed.
+    #[error(transparent)]
+    Contract(#[from] crate::contract::ContractError),
+    /// `doctor` found rule violations (already printed).
+    #[error("{0} architecture problem(s) found")]
+    Unhealthy(usize),
     /// The project's library name could not be found.
     #[error("cannot tell the library name: Cargo.toml has no `name = \"..\"`")]
     NoPackageName,
@@ -109,6 +115,40 @@ pub fn new_queue_handler(workspace: &mut dyn Workspace, name: &str, options: Opt
         options.force,
         options.dry_run,
     )?)
+}
+
+/// `nestrs generate use-case <feature> <action>`: a use case for an existing feature.
+pub fn new_use_case(
+    workspace: &mut dyn Workspace,
+    feature: &str,
+    plural: Option<&str>,
+    action: &str,
+    options: Options,
+) -> Result<Report, CliError> {
+    let feature = Names::parse(feature, plural)?;
+    let action = Names::parse(action, None)?;
+    require_project(workspace)?;
+    Ok(templates::use_case(&feature, &action).apply(workspace, options.force, options.dry_run)?)
+}
+
+/// `nestrs generate controller <name>`: a controller, registered in `<module>_module.rs`.
+pub fn new_controller(
+    workspace: &mut dyn Workspace,
+    name: &str,
+    module: Option<&str>,
+    options: Options,
+) -> Result<Report, CliError> {
+    let names = Names::parse(name, None)?;
+    require_project(workspace)?;
+    let module = module.unwrap_or(&names.snake).to_owned();
+    Ok(templates::controller(&names, &module).apply(workspace, options.force, options.dry_run)?)
+}
+
+/// `nestrs generate port <name>`: a port, an in-memory adapter and the module that provides it.
+pub fn new_port(workspace: &mut dyn Workspace, name: &str, options: Options) -> Result<Report, CliError> {
+    let names = Names::parse(name, None)?;
+    require_project(workspace)?;
+    Ok(templates::port(&names).apply(workspace, options.force, options.dry_run)?)
 }
 
 fn require_project(workspace: &dyn Workspace) -> Result<String, CliError> {

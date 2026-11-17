@@ -10,10 +10,13 @@ use tokio::sync::watch;
 use tokio::task::JoinSet;
 
 use crate::job::Job;
+use tracing::Instrument;
+
 use crate::queue::{Envelope, HandlerError, QueueHandler, Reserved};
+use crate::trace::TracePropagationPort;
 
 /// Tuning for the runner.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct JobsConfig {
     /// Start nothing at all. Lets a deployment run the web tier without background work
     /// (and a separate worker deployment run only that).
@@ -29,6 +32,23 @@ pub struct JobsConfig {
     pub lease: Duration,
     /// How often expired leases are looked for and their work requeued.
     pub reap_every: Duration,
+    /// Carries trace context through queued messages. `None` (the default) propagates nothing;
+    /// `nestrs-otel` provides an OpenTelemetry implementation.
+    pub propagation: Option<TracePropagationPort>,
+}
+
+impl std::fmt::Debug for JobsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JobsConfig")
+            .field("enabled", &self.enabled)
+            .field("shutdown_grace", &self.shutdown_grace)
+            .field("poll", &self.poll)
+            .field("concurrency", &self.concurrency)
+            .field("lease", &self.lease)
+            .field("reap_every", &self.reap_every)
+            .field("propagation", &self.propagation.is_some())
+            .finish()
+    }
 }
 
 impl Default for JobsConfig {
@@ -40,6 +60,7 @@ impl Default for JobsConfig {
             concurrency: 1,
             lease: Duration::from_secs(30),
             reap_every: Duration::from_secs(5),
+            propagation: None,
         }
     }
 }
@@ -148,8 +169,19 @@ async fn run_schedule(job: Arc<dyn Job>, lock: Arc<crate::JobLockPort>, mut stop
                 continue;
             }
         }
+        let span = tracing::info_span!(
+            "job.run",
+            otel.name = %format!("job {name}"),
+            otel.kind = "internal",
+            job.name = %name,
+            otel.status_code = tracing::field::Empty,
+        );
         let attempt = AssertUnwindSafe(tokio::time::timeout(job.timeout(), job.run())).catch_unwind();
-        match attempt.await {
+        let outcome = attempt.instrument(span.clone()).await;
+        if !matches!(outcome, Ok(Ok(Ok(())))) {
+            span.record("otel.status_code", "ERROR");
+        }
+        match outcome {
             Ok(Ok(Ok(()))) => tracing::debug!(job = %name, "job finished"),
             Ok(Ok(Err(error))) => tracing::error!(job = %name, %error, "job failed"),
             Ok(Err(_)) => tracing::error!(job = %name, timeout = ?job.timeout(), "job timed out"),
@@ -249,17 +281,34 @@ async fn settle(
     stop: &mut watch::Receiver<bool>,
 ) {
     let id = reserved.envelope.id.clone();
+    let span = tracing::info_span!(
+        "queue.handle",
+        otel.name = %format!("{queue} process"),
+        otel.kind = "consumer",
+        messaging.system = "nestrs",
+        messaging.destination.name = %queue,
+        messaging.message.id = %id,
+        messaging.attempt = reserved.envelope.attempts + 1,
+        otel.status_code = tracing::field::Empty,
+    );
+    if let (Some(propagation), Some(carrier)) = (&config.propagation, &reserved.envelope.traceparent) {
+        propagation.adopt(&span, carrier);
+    }
     let handled = AssertUnwindSafe(tokio::time::timeout(
         handler.timeout(),
         handler.handle(&reserved.envelope.payload),
     ))
-    .catch_unwind();
+    .catch_unwind()
+    .instrument(span.clone());
     let attempt = leased(queue, backend, &reserved, config.lease, handled).await;
     let outcome = match attempt {
         Ok(Ok(result)) => result,
         Ok(Err(_)) => Err(HandlerError::Retry("the attempt timed out".to_owned())),
         Err(_) => Err(HandlerError::Retry("the handler panicked".to_owned())),
     };
+    if outcome.is_err() {
+        span.record("otel.status_code", "ERROR");
+    }
     let attempts = reserved.envelope.attempts + 1;
     let result = match outcome {
         Ok(()) => backend.ack(queue, &reserved).await,

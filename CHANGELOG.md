@@ -21,6 +21,19 @@ All crates in the workspace share one version and are released together.
   transaction; `OutboxRelay` delivers at least once with per-key ordering, exponential back-off, dead
   letters and lease-based claims; `SeaOutboxStore`, `MemoryOutboxStore`, `QueuePublisher`,
   `CreateOutbox`, `OutboxModule`. The blog announces published posts through it.
+- **`nestrs-otel`**: OpenTelemetry adapter. `Telemetry` (OTLP/HTTP export, parent-based ratio
+  sampling), `HttpTracing` server-span interceptor, `OtelPropagation` for W3C trace context through
+  queues. `nestrs-jobs` now emits `job <name>` and `<queue> process` spans and carries an optional
+  `traceparent` in queue envelopes (`TracePropagation` port, `JobsConfig::propagation`);
+  `nestrs-outbox` emits `outbox.publish`. `JobsModule::in_memory_with` and `Service::without_logging`
+  support custom configuration. The blog exports traces when `BLOG_OTLP_ENDPOINT` is set.
+- **`nestrs-cli`**: `generate contract` (TypeScript oRPC contract from the Rust controllers and DTOs, via
+  `syn`; `--check`, `--strict`, `--also`), `generate use-case|controller|port`, `doctor` (layer-rule and
+  unregistered-controller checks), and `--dry-run` now prints a unified diff computed on an in-memory overlay.
+  `Workspace` gained `rust_files`. `Service::without_logging`. The blog's demo seeder moved from
+  `infrastructure` to `composition` (found by `doctor`); `examples/react-orpc` generates its contract with the CLI.
+- **Tutorial** (`docs/tutorial/`): nine chapters building the blog, with a test that fails when a quoted block drifts
+  from `examples/blog-api`. CI runs `nestrs doctor` and `generate contract --check --strict` on the blog.
 - Crate metadata (keywords, categories, homepage, readme), license files and a README for every
   published crate.
 - `RELEASING.md`, a release workflow that publishes in dependency order, and CI jobs for MSRV,

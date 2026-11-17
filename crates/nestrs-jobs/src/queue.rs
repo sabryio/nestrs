@@ -30,6 +30,10 @@ pub struct Envelope {
     pub payload: String,
     /// Completed attempts so far.
     pub attempts: u32,
+    /// W3C `traceparent` of the producer, so the handler's span joins its trace. Present only
+    /// when a [`TracePropagation`](crate::TracePropagation) is configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
 }
 
 /// An [`Envelope`] a worker holds exclusively until it acks or nacks it.
@@ -97,6 +101,7 @@ pub trait QueueBackend {
 #[injectable]
 pub struct Queue {
     backend: Arc<QueueBackendPort>,
+    config: Arc<crate::JobsConfig>,
 }
 
 impl Queue {
@@ -111,6 +116,11 @@ impl Queue {
                     id: id.clone(),
                     payload,
                     attempts: 0,
+                    traceparent: self
+                        .config
+                        .propagation
+                        .as_ref()
+                        .and_then(|propagation| propagation.current()),
                 },
             )
             .await?;

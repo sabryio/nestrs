@@ -10,6 +10,7 @@ use nestrs::prelude::*;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
+use tracing::Instrument;
 
 use crate::publisher::PublishError;
 use crate::{OutboxMessage, OutboxPublisherPort, OutboxStorePort};
@@ -144,9 +145,21 @@ impl Delivery {
     }
 
     async fn deliver(&self, message: OutboxMessage) {
+        let span = tracing::info_span!(
+            "outbox.publish",
+            otel.name = %format!("{} publish", message.topic),
+            otel.kind = "producer",
+            messaging.system = "nestrs",
+            messaging.destination.name = %message.topic,
+            messaging.message.id = %message.id,
+            messaging.attempt = message.attempts + 1,
+            otel.status_code = tracing::field::Empty,
+        );
         let attempt = tokio::time::timeout(
             self.config.publish_timeout,
-            AssertUnwindSafe(self.publisher.publish(&message)).catch_unwind(),
+            AssertUnwindSafe(self.publisher.publish(&message))
+                .catch_unwind()
+                .instrument(span.clone()),
         )
         .await;
         let outcome = match attempt {
@@ -154,6 +167,9 @@ impl Delivery {
             Ok(Err(_panic)) => Err(PublishError::Retry("the publisher panicked".to_owned())),
             Ok(Ok(result)) => result,
         };
+        if outcome.is_err() {
+            span.record("otel.status_code", "ERROR");
+        }
         match outcome {
             Ok(()) => {
                 self.record(self.store.complete(&message).await, &message, "complete");

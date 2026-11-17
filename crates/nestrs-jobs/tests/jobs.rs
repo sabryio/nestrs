@@ -228,6 +228,7 @@ async fn a_worker_that_dies_loses_its_work_to_the_reaper_and_poison_is_buried() 
         id: id.into(),
         payload: "1".into(),
         attempts: 0,
+        traceparent: None,
     };
 
     backend.push(queue, envelope("a")).await.unwrap();

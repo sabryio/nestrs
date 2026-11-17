@@ -23,8 +23,9 @@ Rust handlers + DTOs ──► OpenAPI (openapi.json) ──► contract.generat
 ```
 
 ```sh
-npm run gen             # rebuild openapi.json from the Rust binary, regenerate the contract
-npm run check:contract  # CI: fail if either file is stale (a server change not regenerated)
+npm run gen             # nestrs generate contract: read the Rust controllers/DTOs with syn, write the contract
+npm run check:contract  # CI: fail (with a diff) if the contract is stale or anything had to be left out
+npm run gen:openapi     # alternative: go through the running server's OpenAPI document instead
 ```
 
 What the generator does with the spec:

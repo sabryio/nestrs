@@ -9,8 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen": "tsx scripts/generate-contract.ts --from-server",
-    "check:contract": "tsx scripts/generate-contract.ts --check"
+    "gen": "cd ../blog-api && cargo run --quiet -p nestrs-cli -- generate contract --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts",
+    "check:contract": "cd ../blog-api && cargo run --quiet -p nestrs-cli -- generate contract --check --strict --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts",
+    "gen:openapi": "tsx scripts/generate-contract.ts --from-server",
+    "check:openapi": "tsx scripts/generate-contract.ts --check"
   },
   "dependencies": {
     "@orpc/client": "2.0.0-beta.50",

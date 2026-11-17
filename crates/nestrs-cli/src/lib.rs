@@ -10,6 +10,9 @@
 //! | [`patch`] | edits existing Rust by parsing it (`syn` spans), never by matching text |
 //! | [`plan`] | the operations ([`Op`]) and how they are applied, safely and idempotently |
 //! | [`workspace`] | the [`Workspace`] port (read / write files) with disk and in-memory adapters |
+//! | [`contract`] | `generate contract`: the TypeScript oRPC contract, read from the Rust sources with `syn` |
+//! | [`doctor`] | `doctor`: layer-rule and wiring checks, by parsing |
+//! | [`diff`] | unified diffs for `--dry-run` and `--check` |
 //! | [`commands`] | glues them: resolve names, build the plan, apply it, report |
 //!
 //! ## Stability
@@ -25,6 +28,9 @@
 #![forbid(unsafe_code)]
 
 pub mod commands;
+pub mod contract;
+pub mod diff;
+pub mod doctor;
 pub mod naming;
 pub mod patch;
 pub mod plan;

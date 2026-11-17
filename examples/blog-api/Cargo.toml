@@ -21,11 +21,13 @@ nestrs-health.workspace = true
 nestrs-interceptors.workspace = true
 nestrs-jobs.workspace = true
 nestrs-kit.workspace = true
+nestrs-otel.workspace = true
 nestrs-outbox.workspace = true
 nestrs-redis.workspace = true
 nestrs-sea-orm = { workspace = true, features = ["sqlite", "postgres"] }
 utoipa.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 serde_json.workspace = true
 sea-orm = { version = "1", default-features = false, features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "with-uuid"] }
 async-trait = "0.1"

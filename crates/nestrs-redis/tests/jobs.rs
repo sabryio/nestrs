@@ -24,6 +24,7 @@ fn job(id: &str) -> Envelope {
         id: id.to_owned(),
         payload: format!("\"{id}\""),
         attempts: 0,
+        traceparent: None,
     }
 }
 

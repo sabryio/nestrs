@@ -9,7 +9,9 @@ use std::path::Path;
 use std::process::Command;
 
 use nestrs_cli::DiskWorkspace;
-use nestrs_cli::commands::{Options, new_feature, new_job, new_module, new_project, new_queue_handler};
+use nestrs_cli::commands::{
+    Options, new_controller, new_feature, new_job, new_module, new_port, new_project, new_queue_handler, new_use_case,
+};
 use nestrs_cli::templates::DependencySource;
 
 fn cargo(dir: &Path, target: &Path, args: &[&str]) {
@@ -45,6 +47,25 @@ fn a_generated_project_with_features_builds_tests_and_lints_clean() {
     new_module(&mut workspace, "billing", Options::default()).unwrap();
     new_job(&mut workspace, "purge-drafts", Options::default()).unwrap();
     new_queue_handler(&mut workspace, "send-welcome", Options::default()).unwrap();
+    new_use_case(&mut workspace, "invoice", None, "archive", Options::default()).unwrap();
+    new_controller(&mut workspace, "billing", Some("billing"), Options::default()).unwrap();
+    new_port(&mut workspace, "mailer", Options::default()).unwrap();
+
+    // Everything generated obeys the architecture it was generated for.
+    let diagnosis = nestrs_cli::doctor::diagnose(&workspace).unwrap();
+    assert!(diagnosis.is_healthy(), "{:?}", diagnosis.violations);
+
+    // And the API it exposes can be described as a contract without leaving anything out.
+    let report = nestrs_cli::contract::run(
+        &mut workspace,
+        &nestrs_cli::contract::ContractOptions {
+            out: "contract.generated.ts".into(),
+            strict: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(report.routes >= 6, "{report:?}");
 
     // Share the workspace's build cache so the dependencies are not compiled again.
     let target = repo.join("target");

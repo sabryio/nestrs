@@ -20,6 +20,11 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      # The blog obeys its own layer rules, and the React contract matches its controllers.
+      - run: cargo run -q -p nestrs-cli -- doctor
+        working-directory: examples/blog-api
+      - run: cargo run -q -p nestrs-cli -- generate contract --check --strict --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts
+        working-directory: examples/blog-api
       # Builds a generated project (modules, features, jobs) and lints it.
       - run: cargo test -p nestrs-cli -- --ignored
 

@@ -21,8 +21,13 @@ pub struct JobsModule;
 impl JobsModule {
     /// Memory-backed lock and queues, default settings.
     pub fn in_memory() -> ModuleRef {
+        Self::in_memory_with(JobsConfig::default())
+    }
+
+    /// Memory-backed lock and queues with your own settings (concurrency, leases, trace propagation).
+    pub fn in_memory_with(config: JobsConfig) -> ModuleRef {
         Self::build(
-            JobsConfig::default(),
+            config,
             Provider::value(std::sync::Arc::new(MemoryJobLock::new()) as crate::JobLockPort),
             Provider::value(std::sync::Arc::new(MemoryQueueBackend::new()) as crate::QueueBackendPort),
         )

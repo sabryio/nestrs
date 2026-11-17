@@ -43,6 +43,7 @@ pub struct Service {
     timeout: Option<Duration>,
     rate_limit: Option<RateLimitFactory>,
     default_log_filter: String,
+    init_logging: bool,
 }
 
 impl Service {
@@ -55,6 +56,7 @@ impl Service {
             timeout: None,
             rate_limit: None,
             default_log_filter: "info,tower_http=debug".to_owned(),
+            init_logging: true,
         }
     }
 
@@ -115,6 +117,20 @@ impl Service {
         self
     }
 
+    /// Leaves the `tracing` subscriber to the caller. Use it when you build your own (for example
+    /// to add an OpenTelemetry layer); install it *before* [`run`](Self::run).
+    pub fn without_logging(self) -> Self {
+        self.without_logging_if(true)
+    }
+
+    /// [`without_logging`](Self::without_logging) when `skip` is true; keeps a builder chain intact.
+    pub fn without_logging_if(mut self, skip: bool) -> Self {
+        if skip {
+            self.init_logging = false;
+        }
+        self
+    }
+
     /// Builds the app rooted at `root` and serves it. `bind` reads the listen address
     /// from the built container (usually from your config).
     pub async fn run<M: Module>(
@@ -123,7 +139,9 @@ impl Service {
         bind: impl FnOnce(&Container) -> Result<String, DiError>,
     ) -> Result<(), AppError> {
         let print_openapi = wants_openapi(std::env::args());
-        self.init_logging(print_openapi);
+        if self.init_logging {
+            self.init_logging(print_openapi);
+        }
 
         let app = App::builder(root).filter::<ErrorLogFilter>().build().await?;
         let bind_addr = bind(app.container())?;

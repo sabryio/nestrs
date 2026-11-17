@@ -520,6 +520,29 @@ not patch so you can do it by hand. `nestrs new --nestrs-path <checkout>` points
 `cargo test -p nestrs-cli -- --ignored` generates a project with two features and checks it builds, passes its tests
 and is clippy-clean.
 
+**Smaller generators.** `generate use-case invoice archive` adds `ArchiveInvoice` (with a unit test and a fake
+repository) to `application/` and to the feature's module; `generate controller billing [--module invoices]` adds a
+controller and registers it; `generate port mailer` adds a domain port, an in-memory adapter, and a module that
+provides and exports it. Every generator takes `--dry-run`, which now prints a unified diff of exactly what would change
+(later steps see earlier ones, so the diff is the real result).
+
+**`nestrs doctor`** checks the project against its own architecture by parsing, not grepping: `domain` and
+`application` must not reach `infrastructure`, `presentation` or `composition`, nor web/database crates
+(`axum`, `sea_orm`, `sqlx`, `redis`, `nestrs_http`, ..); `infrastructure` must not call back into `application` or
+`presentation`; `presentation` must not touch `infrastructure`. It also flags controllers no `#[module]` registers
+(they compile, then 404). It exits non-zero, so CI can gate on it. Running it on the blog example found a seeder that
+drove use cases from `infrastructure`; it now lives in `composition`.
+
+**`nestrs generate contract`** writes the TypeScript oRPC contract from the Rust sources, read with `syn`: routes
+(`#[get("/{id}")]`), inputs (`Path`, `Query`, `ValidatedJson`, `PaginationPipe`), outputs (`Json<T>`,
+`EventStream<T>`, tuples with headers), documented failures (`#[response]`, guards, roles), and the DTOs with their
+serde (`rename_all`, `tag`, `default`, `skip`) and `validator` attributes (length, range, email, url). No build and no
+running server; the mount prefix is read from `.prefix("..")` in `main.rs`. Anything JSON cannot express (recursive or
+untagged types, foreign types, `impl IntoResponse`) is reported as a warning and that route is left out, never
+guessed; `--strict` fails on warnings and `--check` fails with a diff when the file is stale, for CI. `--also <dir>`
+adds source directories (the health controller lives in `nestrs-health`). `examples/react-orpc` now uses it
+(`npm run gen`, `npm run check:contract`); the OpenAPI route stays as `npm run gen:openapi`.
+
 ### Benchmarks and soak (`nestrs-bench`)
 
 `cargo bench -p nestrs-bench` measures `GET /hello` in process (no sockets) as plain axum, then nestrs with one more
@@ -729,7 +752,7 @@ response body.
 |---|---|---|
 | `domain` | entities, value objects that make invalid states unrepresentable (`Email::parse`), repository **ports** | nothing |
 | `application` | use cases (one `#[injectable]` struct, one `execute`), the `TokenVerifier` port, `ApplicationError` | domain |
-| `infrastructure` | adapters implementing the ports (`#[injectable(provides = ..)]`): repositories, token verifier, config, seeder | domain, application |
+| `infrastructure` | adapters implementing the ports (`#[injectable(provides = ..)]`): repositories, token verifier, config | domain, application |
 | `presentation` | controllers, request/response DTOs, `by_caller()`, the one `ApplicationError -> HttpError` mapping | application, domain |
 | `composition` | `#[module]`s and `#[provider]` functions binding ports to adapters, listing use cases and controllers | everything |
 
@@ -823,8 +846,9 @@ nestrs/
 │   │                    DatabaseIndicator, SeaOrmModule
 │   ├── nestrs-outbox/   Outbox (in-transaction writer), OutboxStore/Publisher ports, OutboxRelay,
 │   │                    SeaOutboxStore, CreateOutbox, QueuePublisher, OutboxModule
+│   ├── nestrs-otel/     Telemetry (OTLP), HttpTracing interceptor, OtelPropagation for queues
 │   ├── nestrs-cache/    ValueStore port, MemoryValueStore, ServiceCache (single-flight read-through)
-│   ├── nestrs-cli/      the `nestrs` command: `new`, `generate feature` (pure templates, Workspace port)
+│   ├── nestrs-cli/      the `nestrs` command: `new`, `generate feature|use-case|controller|port|contract`, `doctor`
 │   ├── nestrs-bench/    overhead benchmarks vs plain axum, full-stack soak test
 │   ├── nestrs-jwt/      JwtAuthenticator (Authenticator port), KeySource + StaticKeys (HMAC/PEM/JWKS), claim mapping
 │   ├── nestrs-health/   HealthIndicator port, HealthChecker, /health/live + /health/ready, HealthModule
@@ -846,7 +870,7 @@ nestrs/
     │   ├── application/          use cases (RegisterUser, PublishPost, ..), TokenVerifier port,
     │   │                         ApplicationError. Plain structs with `new(..)`; fakes in testing.rs
     │   ├── infrastructure/       adapters: persistence/ (in-memory + SeaORM repos, entities and
-    │   │                         sea_orm/migrations/; the pool comes from nestrs-sea-orm), auth.rs, config.rs, seed.rs
+    │   │                         sea_orm/migrations/; the pool comes from nestrs-sea-orm), auth.rs, config.rs
     │   ├── presentation/http/    controllers, DTOs (ToSchema), kit Pagination -> domain Page,
     │   │                         ApplicationError -> HttpError
     │   └── composition/          nestrs modules: Persistence (picks adapters from config), Auth,
@@ -1005,6 +1029,28 @@ Guarantees and their limits:
 In the blog, publishing a post in database mode records `post.published` through
 `OutboxPostAnnouncements`; `PostPublishedHandler` consumes it from the queue. In memory mode a
 `NoAnnouncements` adapter is used and the relay is switched off.
+
+
+## Tutorial
+
+[`docs/tutorial/`](docs/tutorial/README.md) builds the blog in nine chapters (layers, domain, use cases, HTTP, wiring,
+persistence, outbox and traces, testing, shipping). Quoted code is checked against `examples/blog-api` by
+`cargo test -p nestrs-cli --test tutorial`.
+
+## Observability: nestrs-otel
+
+Framework crates emit plain `tracing` spans; `nestrs-otel` turns them into OpenTelemetry traces. HTTP requests
+get a server span named after the route *template*, jobs and queue handlers get spans, and the trace follows a
+message through the queue, so a worker's span is a child of the request that enqueued the work.
+
+```rust
+let telemetry = Telemetry::init(&OtelConfig::new("blog").with_endpoint("http://otel:4318/v1/traces"))?;
+tracing_subscriber::registry().with(telemetry.layer()).with(fmt::layer()).init();
+// Service::interceptor(HttpTracing::new());  JobsConfig { propagation: Some(Arc::new(OtelPropagation::new())), .. }
+```
+
+The blog example does this when `BLOG_OTLP_ENDPOINT` is set. Tests use `Telemetry::with_exporter` with an
+in-memory exporter. Known gap: an outbox row does not carry trace context, so `outbox.publish` starts a new trace.
 
 ## Known limits
 

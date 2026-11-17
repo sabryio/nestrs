@@ -9,6 +9,7 @@ mod auth_module;
 mod messaging_module;
 mod persistence_module;
 mod posts_module;
+mod seed;
 mod seed_module;
 mod shared_state_module;
 mod users_module;

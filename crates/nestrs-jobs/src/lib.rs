@@ -44,6 +44,7 @@ mod module;
 mod queue;
 mod runner;
 mod schedule;
+mod trace;
 
 pub use job::{Job, JobError, JobPort};
 pub use lock::{JobLock, JobLockPort, LockError, MemoryJobLock};
@@ -54,3 +55,4 @@ pub use queue::{
 };
 pub use runner::{JobRunner, JobsConfig};
 pub use schedule::{Schedule, ScheduleError};
+pub use trace::{TracePropagation, TracePropagationPort};

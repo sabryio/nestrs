@@ -11,5 +11,4 @@ pub mod auth;
 pub mod config;
 pub mod events;
 pub mod persistence;
-pub mod seed;
 pub mod shared_state;

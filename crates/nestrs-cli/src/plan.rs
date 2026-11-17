@@ -161,11 +161,25 @@ impl Plan {
         self
     }
 
-    /// Applies the plan. With `dry_run` nothing is written, but the report is the same.
+    /// Applies the plan.
+    ///
+    /// With `dry_run` nothing is written: the plan runs against an in-memory overlay, so later ops
+    /// see earlier ones exactly as in a real run, and [`Report::diff`] holds what would change.
     ///
     /// Existing files are never overwritten unless `force`; a skipped op is reported, it
     /// does not abort the others.
     pub fn apply(&self, workspace: &mut dyn Workspace, force: bool, dry_run: bool) -> io::Result<Report> {
+        if !dry_run {
+            return self.execute(workspace, force);
+        }
+        let mut overlay = crate::workspace::Overlay::new(&*workspace);
+        let mut report = self.execute(&mut overlay, force)?;
+        report.diff = overlay.diff()?;
+        Ok(report)
+    }
+
+    fn execute(&self, workspace: &mut dyn Workspace, force: bool) -> io::Result<Report> {
+        let dry_run = false;
         let mut report = Report::default();
         for op in &self.ops {
             match op {
@@ -304,6 +318,8 @@ pub struct Report {
     pub updated: Vec<String>,
     /// Things left alone, each with the reason and what to do by hand.
     pub skipped: Vec<String>,
+    /// Unified diff of everything a dry run would change; empty for a real run.
+    pub diff: String,
 }
 
 impl Report {
@@ -370,5 +386,52 @@ mod tests {
         let report = plan.apply(&mut ws, false, true).unwrap();
         assert_eq!(report.created, ["a.rs"]);
         assert!(ws.paths().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod dry_run_tests {
+    use super::*;
+    use crate::workspace::MemoryWorkspace;
+
+    #[test]
+    fn a_dry_run_shows_the_diff_of_creates_and_patches_and_writes_nothing() {
+        let mut ws = MemoryWorkspace::new().with("src/mod.rs", "mod a;\n");
+        let mut plan = Plan::new();
+        plan.create("src/b.rs", "pub fn b() {}\n")
+            .ensure_lines("src/mod.rs", ["mod b;"]);
+
+        let report = plan.apply(&mut ws, false, true).unwrap();
+        assert_eq!(report.created, ["src/b.rs"]);
+        assert_eq!(report.updated, ["src/mod.rs"]);
+        assert!(
+            report.diff.contains("+++ src/b.rs") && report.diff.contains("+pub fn b() {}"),
+            "{}",
+            report.diff
+        );
+        assert!(
+            report.diff.contains("+mod b;") && !report.diff.contains("-mod a;"),
+            "{}",
+            report.diff
+        );
+        assert_eq!(ws.paths(), ["src/mod.rs"], "nothing was written");
+        assert_eq!(ws.get("src/mod.rs"), Some("mod a;\n"));
+    }
+
+    #[test]
+    fn later_ops_see_earlier_ones_in_a_dry_run() {
+        let mut ws = MemoryWorkspace::new();
+        let mut plan = Plan::new();
+        plan.create("a.txt", "x\n").ensure_lines("a.txt", ["y"]);
+        let report = plan.apply(&mut ws, false, true).unwrap();
+        assert!(report.diff.contains("+x\n+y\n"), "{}", report.diff);
+    }
+
+    #[test]
+    fn a_real_run_has_no_diff() {
+        let mut ws = MemoryWorkspace::new();
+        let mut plan = Plan::new();
+        plan.create("a.txt", "x\n");
+        assert!(plan.apply(&mut ws, false, false).unwrap().diff.is_empty());
     }
 }
