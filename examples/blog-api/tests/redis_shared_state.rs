@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use blog_api::AppModule;
 use blog_api::infrastructure::config::AppConfig;
-use nestrs::http::axum::http::StatusCode;
-use nestrs_testing::{TestApp, TestClient};
+use purlin::http::axum::http::StatusCode;
+use purlin_testing::{TestApp, TestClient};
 use serde_json::{Value, json};
 
 struct Redis(Child);
@@ -60,7 +60,7 @@ async fn instance(url: &str) -> TestApp {
     panic!("could not start the app against Redis");
 }
 
-async fn signup(client: &TestClient) -> nestrs_testing::TestResponse {
+async fn signup(client: &TestClient) -> purlin_testing::TestResponse {
     client
         .post("/users")
         .bearer("dev-token")

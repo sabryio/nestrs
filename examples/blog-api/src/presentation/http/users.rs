@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use nestrs::prelude::*;
+use purlin::prelude::*;
 use uuid::Uuid;
 
 use super::dto::{CreateUserRequest, UserResponse};
 use super::idempotent::IdempotentWrites;
 use super::page::to_page;
 use crate::application::{GetUser, ListUsers, RegisterUser};
-use nestrs::http::BearerAuth;
-use nestrs_interceptors::{ETag, SecurityHeaders};
-use nestrs_kit::{PaginationPipe, RequestContext, TimingInterceptor};
-use nestrs_sea_orm::Transactional;
+use purlin::http::BearerAuth;
+use purlin_interceptors::{ETag, SecurityHeaders};
+use purlin_kit::{PaginationPipe, RequestContext, TimingInterceptor};
+use purlin_sea_orm::Transactional;
 
 /// HTTP surface of the users use cases: translate, delegate, translate back.
 #[injectable]

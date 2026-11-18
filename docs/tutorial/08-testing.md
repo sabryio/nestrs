@@ -72,7 +72,7 @@ Nothing in the use cases or controllers changed; only the binding did. That is w
 ## Time without sleeping
 
 Libraries in the workspace that deal with time (the outbox relay, queues) use the Tokio clock, so their tests run with
-paused time and finish instantly and deterministically. `nestrs-otel` is tested with an in-memory exporter, so span
+paused time and finish instantly and deterministically. `purlin-otel` is tested with an in-memory exporter, so span
 assertions need no collector.
 
 **SOLID here.** Overrides work because every dependency is an abstraction (*dependency inversion*); a fake and a real adapter

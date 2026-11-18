@@ -90,12 +90,13 @@ pub(crate) fn expand(args: TokenStream, item: ItemStruct) -> syn::Result<TokenSt
     }
     let args: Args = syn::parse2(args)?;
     let ident = &item.ident;
+    let fx = crate::util::fx_path();
     let name = args.name.map_or_else(|| ident.to_string(), |lit| lit.value());
 
     let imports = args
         .imports
         .iter()
-        .map(|ty| quote!(.import(::fx::ModuleRef::of::<#ty>())));
+        .map(|ty| quote!(.import(#fx::ModuleRef::of::<#ty>())));
 
     let providers = args.providers.iter().map(|expr| match as_component(expr) {
         Some(path) => quote_spanned!(expr.span()=> .component::<#path>()),
@@ -123,20 +124,20 @@ pub(crate) fn expand(args: TokenStream, item: ItemStruct) -> syn::Result<TokenSt
     let exports = args.exports.iter().map(|export| {
         let ty = &export.ty;
         match &export.name {
-            Some(name) => quote!(.export(::fx::Export::named::<#ty>(#name))),
-            None => quote!(.export(::fx::Export::of::<#ty>())),
+            Some(name) => quote!(.export(#fx::Export::named::<#ty>(#name))),
+            None => quote!(.export(#fx::Export::of::<#ty>())),
         }
     });
 
     Ok(quote! {
         #item
 
-        impl ::fx::Module for #ident {
-            fn definition() -> ::fx::ModuleDef {
-                ::fx::ModuleDef::new(#name)
+        impl #fx::Module for #ident {
+            fn definition() -> #fx::ModuleDef {
+                #fx::ModuleDef::new(#name)
                     #(#imports)*
                     .options(
-                        ::fx::Options::new()
+                        #fx::Options::new()
                             #(#providers)*
                             #(#invokes)*
                             #(#decorators)*

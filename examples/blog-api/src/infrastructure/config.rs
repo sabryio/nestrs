@@ -1,4 +1,4 @@
-//! Typed application configuration, loaded by `nestrs::config::ConfigModule`.
+//! Typed application configuration, loaded by `purlin::config::ConfigModule`.
 
 use serde::Deserialize;
 use validator::Validate;

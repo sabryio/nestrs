@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use nestrs::http::{MemoryStore, RateLimitStore};
-use nestrs::prelude::*;
-use nestrs_health::{HealthIndicator, HealthIndicatorPort, Unhealthy};
-use nestrs_interceptors::{IdempotencyStorePort, MemoryIdempotencyStore};
-use nestrs_redis::{RedisConnection, RedisIdempotencyStore, RedisIndicator, RedisRateLimitStore};
+use purlin::http::{MemoryStore, RateLimitStore};
+use purlin::prelude::*;
+use purlin_health::{HealthIndicator, HealthIndicatorPort, Unhealthy};
+use purlin_interceptors::{IdempotencyStorePort, MemoryIdempotencyStore};
+use purlin_redis::{RedisConnection, RedisIdempotencyStore, RedisIndicator, RedisRateLimitStore};
 
 use super::config::AppConfig;
 

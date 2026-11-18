@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use async_trait::async_trait;
-use nestrs::prelude::*;
+use purlin::prelude::*;
 use uuid::Uuid;
 
 use crate::domain::{Page, Post, PostRepository, RepositoryError};

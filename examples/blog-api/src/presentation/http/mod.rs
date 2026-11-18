@@ -1,5 +1,5 @@
 //! HTTP controllers, DTOs and error mapping. Cross-cutting pieces (timing, pagination,
-//! request context, error logging) come from `nestrs-kit`.
+//! request context, error logging) come from `purlin-kit`.
 
 mod dto;
 mod error;

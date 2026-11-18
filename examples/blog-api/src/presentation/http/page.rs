@@ -1,5 +1,5 @@
-use nestrs::prelude::*;
-use nestrs_kit::Pagination;
+use purlin::prelude::*;
+use purlin_kit::Pagination;
 
 use crate::domain::Page;
 

@@ -1,7 +1,7 @@
 # 1. Start a project
 
 ```text
-nestrs new blog-api --nestrs-path ../nestrs
+purlin new blog-api --purlin-path ../purlin
 cd blog-api
 ```
 
@@ -36,11 +36,11 @@ touching business rules, and why the domain can be tested with no framework at a
 
 ## Make it check itself
 
-Rules that live only in a README erode. `nestrs doctor` reads the code (with `syn`, so comments and strings do not count)
+Rules that live only in a README erode. `purlin doctor` reads the code (with `syn`, so comments and strings do not count)
 and fails when a layer reaches where it must not:
 
 ```text
-$ nestrs doctor
+$ purlin doctor
 healthy: 9 files follow the layer rules
 ```
 
@@ -51,8 +51,8 @@ non-zero. Chapter 9 puts it in CI.
 ## Generate a slice
 
 ```text
-nestrs generate feature post --dry-run     # prints a unified diff; writes nothing
-nestrs generate feature post
+purlin generate feature post --dry-run     # prints a unified diff; writes nothing
+purlin generate feature post
 ```
 
 ```text

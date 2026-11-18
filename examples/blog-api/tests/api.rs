@@ -2,10 +2,10 @@
 //! The default token is `dev-token` (see `AppConfig::default`).
 
 use blog_api::AppModule;
-use nestrs::http::axum::http::StatusCode;
-use nestrs::openapi::ApiInfo;
-use nestrs::prelude::App;
-use nestrs_testing::{TestApp, TestClient};
+use purlin::http::axum::http::StatusCode;
+use purlin::openapi::ApiInfo;
+use purlin::prelude::App;
+use purlin_testing::{TestApp, TestClient};
 use serde_json::{Value, json};
 
 const TOKEN: &str = "dev-token";
@@ -354,8 +354,8 @@ async fn requests_a_guard_rejects_do_not_use_up_the_write_allowance() {
 
 #[tokio::test]
 async fn readiness_reports_the_database_check_and_fails_when_it_does() {
-    use nestrs::prelude::{Arc, Multi};
-    use nestrs_health::{HealthIndicator, HealthIndicatorPort, Unhealthy};
+    use purlin::prelude::{Arc, Multi};
+    use purlin_health::{HealthIndicator, HealthIndicatorPort, Unhealthy};
 
     let client = client().await;
     let body: Value = client
@@ -370,7 +370,7 @@ async fn readiness_reports_the_database_check_and_fails_when_it_does() {
 
     // Swap the whole set for one with a failing check, the way a test replaces any provider.
     struct Down;
-    #[nestrs::async_trait]
+    #[purlin::async_trait]
     impl HealthIndicator for Down {
         fn name(&self) -> &str {
             "database"
@@ -380,7 +380,7 @@ async fn readiness_reports_the_database_check_and_fails_when_it_does() {
         }
     }
     let failing: HealthIndicatorPort = Arc::new(Down);
-    let app = nestrs_testing::TestApp::builder(AppModule)
+    let app = purlin_testing::TestApp::builder(AppModule)
         .override_value(Multi::<dyn HealthIndicator>::new(vec![failing]))
         .start()
         .await;

@@ -5,9 +5,9 @@
 use std::time::Duration;
 
 use blog_api::AppModule;
-use nestrs::http::axum;
-use nestrs::openapi::ApiInfo;
-use nestrs::prelude::App;
+use purlin::http::axum;
+use purlin::openapi::ApiInfo;
+use purlin::prelude::App;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

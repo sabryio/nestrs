@@ -1,6 +1,6 @@
 # react-orpc
 
-A React app that talks to the nestrs `blog-api` through a **typed oRPC client**, with
+A React app that talks to the purlin `blog-api` through a **typed oRPC client**, with
 no oRPC server anywhere: the contract is *generated from the Rust server's OpenAPI
 document*, and `OpenAPILink` turns every call into a plain REST request against it.
 The Rust handlers are the only place the API is written down.
@@ -23,7 +23,7 @@ Rust handlers + DTOs ──► OpenAPI (openapi.json) ──► contract.generat
 ```
 
 ```sh
-npm run gen             # nestrs generate contract: read the Rust controllers/DTOs with syn, write the contract
+npm run gen             # purlin generate contract: read the Rust controllers/DTOs with syn, write the contract
 npm run check:contract  # CI: fail (with a diff) if the contract is stale or anything had to be left out
 npm run gen:openapi     # alternative: go through the running server's OpenAPI document instead
 ```
@@ -40,7 +40,7 @@ What the generator does with the spec:
   `NOT_FOUND`) and the error envelope's body becomes the error's typed `data`;
 - the shared path prefix (`/api`) is exported as `apiPrefix` for the link.
 
-It handles the OpenAPI subset the nestrs generator emits and **refuses** anything else
+It handles the OpenAPI subset the purlin generator emits and **refuses** anything else
 (`allOf`, recursive schemas, header parameters, non-JSON bodies) with a message naming
 the operation, instead of guessing `z.any()`.
 

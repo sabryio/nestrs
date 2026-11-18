@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use blog_api::AppModule;
 use blog_api::infrastructure::config::AppConfig;
-use nestrs::http::axum;
-use nestrs_testing::TestApp;
+use purlin::http::axum;
+use purlin_testing::TestApp;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

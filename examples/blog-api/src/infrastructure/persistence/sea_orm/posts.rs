@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::entities::post;
 use super::{executor, unavailable};
 use crate::domain::{Page, Post, PostBody, PostRepository, PostTitle, RepositoryError};
-use nestrs_sea_orm::Database;
+use purlin_sea_orm::Database;
 
 /// Adapter for [`PostRepository`] backed by SeaORM.
 pub struct SeaPostRepository {

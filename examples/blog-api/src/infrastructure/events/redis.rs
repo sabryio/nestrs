@@ -1,8 +1,8 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use nestrs::prelude::*;
-use nestrs_redis::{RedisConnection, RedisEventStream, StreamId, StreamSubscription};
+use purlin::prelude::*;
+use purlin_redis::{RedisConnection, RedisEventStream, StreamId, StreamSubscription};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ pub struct RedisPostEvents {
 
 impl RedisPostEvents {
     /// Connects the feed on the stream `key` and starts its reader.
-    pub async fn connect(redis: RedisConnection, key: &str) -> Result<Self, nestrs_redis::RedisError> {
+    pub async fn connect(redis: RedisConnection, key: &str) -> Result<Self, purlin_redis::RedisError> {
         Ok(Self {
             stream: RedisEventStream::new(redis, key, RETAINED).await?,
         })

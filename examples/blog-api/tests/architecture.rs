@@ -59,7 +59,7 @@ fn assert_no_mentions_except(layer: &str, forbidden: &[&str], allowed: &[&str]) 
     );
 }
 
-const FRAMEWORKS: [&str; 5] = ["nestrs", "axum", "serde", "validator", "tower"];
+const FRAMEWORKS: [&str; 5] = ["purlin", "axum", "serde", "validator", "tower"];
 
 #[test]
 fn the_domain_depends_on_nothing_outside_itself() {
@@ -72,7 +72,7 @@ fn the_domain_depends_on_nothing_outside_itself() {
     ]);
     // The one exception: the declarative `#[port]` attribute, which only marks a
     // trait as an injectable abstraction (and brings in `async_trait`).
-    assert_no_mentions_except("domain", &forbidden, &["use nestrs::port;", "#[port]"]);
+    assert_no_mentions_except("domain", &forbidden, &["use purlin::port;", "#[port]"]);
 }
 
 #[test]
@@ -84,8 +84,8 @@ fn the_application_depends_on_the_domain_only() {
         "application",
         &forbidden,
         &[
-            "use nestrs::port;",
-            "use nestrs::injectable;",
+            "use purlin::port;",
+            "use purlin::injectable;",
             "#[port]",
             "#[injectable]",
         ],

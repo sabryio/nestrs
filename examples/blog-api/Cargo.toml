@@ -1,6 +1,6 @@
 [package]
 name = "blog-api"
-description = "Example application: a small blog API built with nestrs"
+description = "Example application: a small blog API built with purlin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,15 +16,15 @@ name = "blog-api"
 path = "src/main.rs"
 
 [dependencies]
-nestrs.workspace = true
-nestrs-health.workspace = true
-nestrs-interceptors.workspace = true
-nestrs-jobs.workspace = true
-nestrs-kit.workspace = true
-nestrs-otel.workspace = true
-nestrs-outbox.workspace = true
-nestrs-redis.workspace = true
-nestrs-sea-orm = { workspace = true, features = ["sqlite", "postgres"] }
+purlin = { workspace = true, features = ["http"] }
+purlin-health = { workspace = true, features = ["http"] }
+purlin-interceptors.workspace = true
+purlin-jobs.workspace = true
+purlin-kit.workspace = true
+purlin-otel.workspace = true
+purlin-outbox.workspace = true
+purlin-redis.workspace = true
+purlin-sea-orm = { workspace = true, features = ["http", "sqlite", "postgres"] }
 utoipa.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -39,7 +39,7 @@ validator.workspace = true
 sea-orm-migration = { version = "1.1", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
 
 [dev-dependencies]
-nestrs-testing.workspace = true
+purlin-testing.workspace = true
 tokio = { workspace = true, features = ["io-util"] }
 
 [lints]

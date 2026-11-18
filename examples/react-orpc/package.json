@@ -3,14 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "React + oRPC (contract-first, OpenAPI link) + TanStack Query against the nestrs blog-api, with typed Server-Sent Events.",
+  "description": "React + oRPC (contract-first, OpenAPI link) + TanStack Query against the purlin blog-api, with typed Server-Sent Events.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen": "cd ../blog-api && cargo run --quiet -p nestrs-cli -- generate contract --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts",
-    "check:contract": "cd ../blog-api && cargo run --quiet -p nestrs-cli -- generate contract --check --strict --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts",
+    "gen": "cd ../blog-api && cargo run --quiet -p purlin-cli -- generate contract --also ../../crates/purlin-health/src --out ../react-orpc/src/contract.generated.ts",
+    "check:contract": "cd ../blog-api && cargo run --quiet -p purlin-cli -- generate contract --check --strict --also ../../crates/purlin-health/src --out ../react-orpc/src/contract.generated.ts",
     "gen:openapi": "tsx scripts/generate-contract.ts --from-server",
     "check:openapi": "tsx scripts/generate-contract.ts --check"
   },

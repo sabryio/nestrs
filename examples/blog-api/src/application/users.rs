@@ -1,4 +1,4 @@
-use nestrs::injectable;
+use purlin::injectable;
 use uuid::Uuid;
 
 use super::ApplicationError;

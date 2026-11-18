@@ -1,0 +1,27 @@
+error[E0277]: the trait bound `NotAnInterceptor: Interceptor` is not satisfied
+ --> tests/ui/fail/controller_bad_interceptor.rs:8:1
+  |
+8 | #[controller("/c")]
+  | ^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `Interceptor` is not implemented for `NotAnInterceptor`
+ --> tests/ui/fail/controller_bad_interceptor.rs:3:1
+  |
+3 | struct NotAnInterceptor;
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Interceptor`
+ --> $WORKSPACE/crates/purlin-http/src/rate_limit.rs
+  |
+  | impl Interceptor for RateLimit {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RateLimit`
+  |
+ ::: $WORKSPACE/crates/purlin-http/src/timeout.rs
+  |
+  | impl Interceptor for Timeout {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `purlin::http::Timeout`
+note: required by a bound in `intercepted`
+ --> $WORKSPACE/crates/purlin-http/src/interceptor.rs
+  |
+  | pub fn intercepted<I: Interceptor>(route: MethodRouter, interceptor: Arc<I>) -> MethodRouter {
+  |                       ^^^^^^^^^^^ required by this bound in `intercepted`
+  = note: this error originates in the attribute macro `controller` (in Nightly builds, run with -Z macro-backtrace for more info)

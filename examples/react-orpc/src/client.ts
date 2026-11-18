@@ -6,7 +6,7 @@ import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
 
 import { apiPrefix, contract } from "./contract.generated";
-import { decodeNestrsError, markDefinedErrors } from "./errors";
+import { decodePurlinError, markDefinedErrors } from "./errors";
 
 export interface ClientOptions {
   /** Origin of the API; leave unset in the browser (the Vite proxy handles it). */
@@ -22,7 +22,7 @@ export interface ClientOptions {
 }
 
 /**
- * A typed client for the nestrs blog-api, built from the contract alone.
+ * A typed client for the purlin blog-api, built from the contract alone.
  *
  * Event streams reconnect by themselves. The retry plugin remembers the `id` of the
  * last message it delivered and sends it back as `Last-Event-ID`, so the server
@@ -37,7 +37,7 @@ export function createClient(options: ClientOptions = {}): ContractRouterClient<
       const token = options.token?.();
       return token ? { authorization: `Bearer ${token}` } : {};
     },
-    errorResponseBodyDecoder: decodeNestrsError,
+    errorResponseBodyDecoder: decodePurlinError,
     interceptors: [markDefinedErrors(contract)],
     plugins: [
       new RetryLinkPlugin({

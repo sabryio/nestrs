@@ -1,4 +1,4 @@
-# nestrs
+# purlin
 
 NestJS-style architecture for Rust on top of Axum: **modules** that declare what they
 provide and export, **dependency injection** keyed by type or port (a trait), and
@@ -9,7 +9,7 @@ trait impls; the module graph is then validated **at startup** (before any provi
 built), so wiring mistakes are reported as precise errors rather than surfacing mid-request.
 
 ```rust
-use nestrs::prelude::*;
+use purlin::prelude::*;
 
 #[port]                                         // a trait the service depends on
 pub trait UserRepository {
@@ -62,6 +62,32 @@ async fn main() -> Result<(), AppError> {
 }
 ```
 
+## Two layers: `fx` and `purlin`
+
+purlin is built in two layers so that everything that is not HTTP can be reused on its own.
+
+| Layer | Crates | Knows about |
+|---|---|---|
+| **`fx`** | `rust-fx` (library `fx`), `rust-fx-macros` | dependency injection, modules with private scope, lifecycle hooks, graceful start/stop, `Shutdowner`, observers, a test harness. No web stack. |
+| **purlin** | `purlin`, `purlin-http`, `purlin-jobs`, `purlin-outbox`, `purlin-sea-orm`, ... | controllers, guards, interceptors, OpenAPI, request scopes, plus adapters for queues, outbox, databases, Redis, telemetry |
+
+`purlin` depends on `rust-fx` and re-exports it as `purlin::fx`, so a service that outgrows
+HTTP never changes frameworks:
+
+```rust
+use purlin::fx;   // the same `fx::App`, `fx::provide`, `#[fx::module]` as the standalone crate
+```
+
+The HTTP adapter is a feature of the `purlin` facade (`http`, on by default). A worker, a
+queue consumer or a scheduler depends on `purlin = { default-features = false }` and gets no
+`axum`, `hyper` or `tower`. `purlin-jobs`, `purlin-cache` and `purlin-outbox` are headless
+already; `purlin-health` and `purlin-sea-orm` are headless with `default-features = false`.
+`scripts/check-headless.sh` (run in CI) fails if any of them pulls the HTTP stack back in.
+
+Status: `fx` is a complete, standalone runtime (see `crates/rust-fx/README.md`). purlin's own
+module system (`#[injectable]`, `#[module]`, request scopes) still runs on `purlin-core`;
+moving it onto `fx` is the next step, and the two interoperate at the application edge.
+
 ## Smallest example
 
 `examples/todo-minimal/src/main.rs` is a complete app in one file (port, adapter, controller, module,
@@ -70,9 +96,9 @@ architecture with a database, config, OpenAPI and a fuller test suite.
 
 The workspace uses Rust **edition 2024** (MSRV 1.89) and **syn 3** for the macros.
 
-## NestJS → nestrs
+## NestJS → purlin
 
-| NestJS | nestrs |
+| NestJS | purlin |
 |---|---|
 | `@Module({ imports, providers, controllers, exports })` | `#[module(imports=[..], providers=[..], controllers=[..], exports=[..])]` |
 | `@Injectable()` | `#[injectable]` (fields are `Arc<T>` or a port alias, or `#[inject(default)]`) |
@@ -87,9 +113,9 @@ The workspace uses Rust **edition 2024** (MSRV 1.89) and **syn 3** for the macro
 | Authorization | `Principal` + `#[roles(..)]` (any of) / `#[permissions(..)]` (all of); 401 vs 403; documented in OpenAPI |
 | Rate limits, deadlines | `RateLimit` (GCRA, `RateLimitStore` port, `ratelimit-*` + `Retry-After`, 429) and `Timeout` (504); both are ordinary interceptors |
 | `Scope.REQUEST` / `Scope.TRANSIENT` | `#[injectable(scope = request)]` / `scope = transient`, resolved with `Inject<T>` |
-| `@nestjs/config` | `nestrs::config::ConfigModule::for_root::<T>(ConfigSource::new().file(..).env_prefix(..))` |
+| `@nestjs/config` | `purlin::config::ConfigModule::for_root::<T>(ConfigSource::new().file(..).env_prefix(..))` |
 | `@nestjs/swagger` | `#[derive(ToSchema)]` on DTOs, `App::serve_openapi(ApiInfo::new(..))` |
-| `@nestjs/testing` | `nestrs-testing`: `TestApp::builder(AppModule).mock::<TraitPort>(Arc::new(fake))`, `TestClient` |
+| `@nestjs/testing` | `purlin-testing`: `TestApp::builder(AppModule).mock::<TraitPort>(Arc::new(fake))`, `TestClient` |
 | `NestFactory.create(AppModule)` | `App::create(AppModule).await?` |
 | `Test.createTestingModule(..).overrideProvider(..)` | `App::builder(AppModule).override_provider(..)` |
 | `OnModuleInit` / `OnModuleDestroy` | `#[lifecycle] impl T { #[on_init] async fn .. #[on_destroy] async fn .. }` |
@@ -203,12 +229,12 @@ are reported as `DuplicateProvider`.
 **Global modules.** `.global()` or `#[module(global)]` makes a module's exports visible everywhere
 without importing it. Use it sparingly (config, logging); everything else should stay explicit.
 
-**Compile-fail tests.** `crates/nestrs/tests/ui/` holds `trybuild` cases that pin the macros'
+**Compile-fail tests.** `crates/purlin/tests/ui/` holds `trybuild` cases that pin the macros'
 diagnostics: `pass/` must compile, `fail/*.rs` must not, and each `.stderr` snapshot is the exact
 message users see (non-struct `#[injectable]`, non-injectable fields, unknown `#[module]` keys, imports
 that are not modules, controllers without `&self`, a bad guard, a bad extractor, and so on).
 Handler parameters are checked individually, so a wrong extractor is reported on that parameter.
-After changing a macro, review diffs with `TRYBUILD=overwrite cargo test -p nestrs --test ui`.
+After changing a macro, review diffs with `TRYBUILD=overwrite cargo test -p purlin --test ui`.
 
 ## Lifecycle hooks
 
@@ -275,7 +301,7 @@ async fn show(&self, Inject(ctx): Inject<RequestContext>) -> .. { .. }
 
 ## Shared state: fields and `Inject<T>` (there is no axum `State`)
 
-axum's `State` is one value fixed when the router is built. nestrs replaces it with the container: state is a
+axum's `State` is one value fixed when the router is built. purlin replaces it with the container: state is a
 provider, modules declare and export it, tests override it, and the graph is checked at startup.
 
 ```rust
@@ -317,7 +343,7 @@ Request pipeline, outside in: **filters -> guards -> interceptors -> pipes/extra
 
 ```rust
 // Pipe: transform or reject one input. Injectable, so it can use services.
-#[injectable] struct PaginationPipe;   // shipped by nestrs-kit
+#[injectable] struct PaginationPipe;   // shipped by purlin-kit
 impl Pipe for PaginationPipe {
     type Input = Query<PageQuery>;
     type Output = Pagination;
@@ -369,10 +395,10 @@ impl PostsController { .. }
 async fn me(&self, principal: Option<Principal>) -> .. { .. }   // anonymous allowed; a bad token is still 401
 
 // Wrap any Authenticator so an identity provider is not hit on every request.
-let verifier = nestrs_http::cached(Arc::new(MyIdp), CacheConfig::default()); // 30s hits, 5s misses, 10k entries
+let verifier = purlin_http::cached(Arc::new(MyIdp), CacheConfig::default()); // 30s hits, 5s misses, 10k entries
 // Unavailable is never cached, so an outage heals as soon as the provider does.
 
-// nestrs-jwt: a ready-made Authenticator. Algorithms are an explicit allow-list (no default),
+// purlin-jwt: a ready-made Authenticator. Algorithms are an explicit allow-list (no default),
 // exp and sub are required, issuer/audience are checked when configured.
 let config = JwtConfig::rs256().issuer(["https://id.example"]).audience(["blog"]);
 JwtAuthenticator::provider(Arc::new(StaticKeys::jwks(JWKS_JSON)?), config)
@@ -380,7 +406,7 @@ JwtAuthenticator::provider(Arc::new(StaticKeys::jwks(JWKS_JSON)?), config)
 
 `KeyBy::Caller` rate-limits per authenticated subject (falling back to the IP).
 
-### nestrs-kit
+### purlin-kit
 
 The plumbing every service writes, packaged once: `KitModule` (timing interceptor, request-scoped
 `RequestContext`, `PaginationPipe`) and `Service`, which is the whole `main`:
@@ -391,7 +417,7 @@ Service::new("Blog API", env!("CARGO_PKG_VERSION"))
     .run(AppModule, |c| Ok(c.resolve::<AppConfig>()?.bind_addr.clone())).await
 ```
 
-### nestrs-interceptors
+### purlin-interceptors
 
 A catalogue of ready-made interceptors. Each is a plain value (`#[interceptor(..)]` on a route or
 controller, or `Service::interceptor(..)` / `App::interceptor(..)` for the whole app). Anything with state
@@ -424,7 +450,7 @@ and rejects a reused key with a different body; `CircuitBreaker` counts consecut
 counts) and probes with one request when half-open. CORS and compression are `tower-http` layers, and a
 transaction per request belongs behind your own unit-of-work port, so they are not interceptors here.
 
-### nestrs-redis
+### purlin-redis
 
 Redis adapters for the ports above, so several instances share state: `RedisRateLimitStore` (GCRA decided inside
 Redis by one Lua script, using the server's clock), `RedisCacheStore` and `RedisIdempotencyStore`. One
@@ -467,7 +493,7 @@ async fn connect(&self, ws: Ws, principal: Principal) -> Response {
 }
 ```
 
-### nestrs-jobs: scheduled tasks and queues
+### purlin-jobs: scheduled tasks and queues
 
 ```rust
 #[module(imports = [JobsModule::in_memory()], providers = [PurgeDrafts, SendWelcomeEmail])]
@@ -488,12 +514,12 @@ handler runs (so a long job is never mistaken for a dead worker), and finishes w
 or bury (after `max_attempts`, at once for `Fatal`). If a worker dies, its lease expires and a reaper
 (`reap_every`) returns the work to the queue with one more attempt, or buries it at the limit, so work that kills
 its worker cannot loop forever and nothing needs a restart. A worker that lost its lease cannot ack, retry or bury
-work that moved on. Everything stops within `JobsConfig::shutdown_grace`. `nestrs-redis` supplies `RedisJobLock` and
+work that moved on. Everything stops within `JobsConfig::shutdown_grace`. `purlin-redis` supplies `RedisJobLock` and
 `RedisQueueBackend` (waiting list + sorted set of leases scored by server time, atomic Lua for reserve, renew,
 retry, bury and reap; `reserve` polls every 50 ms while empty). `JobsModule::with_backends(config, lock, queue)`
 plugs them in.
 
-### nestrs-cache: service-level caching
+### purlin-cache: service-level caching
 
 `ServiceCache` is a read-through cache for use cases and repositories (below the HTTP `ResponseCache`), so HTTP, jobs
 and queue handlers all benefit: `cache.get_or_load(key, || loader).await`, `cache.invalidate(key)`. One load per key
@@ -501,23 +527,23 @@ per process (single flight), a failing store is a miss (fail open), loader error
 `MemoryValueStore` (bounded) and `RedisValueStore` implement the `ValueStore` port. Use it as a decorator over a
 repository port so callers do not change.
 
-### The `nestrs` CLI
+### The `purlin` CLI
 
 ```text
-cargo install --path crates/nestrs-cli      # installs `nestrs`
-nestrs new shop-api                         # clean-architecture service that boots and has a passing test
-cd shop-api && nestrs generate feature invoice
+cargo install --path crates/purlin-cli      # installs `purlin`
+purlin new shop-api                         # clean-architecture service that boots and has a passing test
+cd shop-api && purlin generate feature invoice
 ```
 
 `generate module|job|queue-handler <name>` add an empty feature module, a scheduled job, or a queue consumer (with its
-message type); jobs and handlers also add `nestrs-jobs` to `Cargo.toml` (following however `nestrs` is declared),
+message type); jobs and handlers also add `purlin-jobs` to `Cargo.toml` (following however `purlin` is declared),
 import `JobsModule::in_memory()` once, and register themselves as providers. `AppModule` is edited by parsing it
 with `syn` (spans give exact offsets) and splicing, so multi-line lists, comments and trailing commas survive;
 new files are run through `rustfmt`, existing ones are only spliced. `generate feature` writes one slice through every layer (domain entity + repository port, use cases, in-memory
 adapter, controller + DTOs + error mapping, module, an HTTP test) and registers it in each layer's `mod.rs` and in
 `AppModule`. It never overwrites (`--force` to), is idempotent, supports `--dry-run`, and reports anything it could
-not patch so you can do it by hand. `nestrs new --nestrs-path <checkout>` points the project at a local nestrs.
-`cargo test -p nestrs-cli -- --ignored` generates a project with two features and checks it builds, passes its tests
+not patch so you can do it by hand. `purlin new --purlin-path <checkout>` points the project at a local purlin.
+`cargo test -p purlin-cli -- --ignored` generates a project with two features and checks it builds, passes its tests
 and is clippy-clean.
 
 **Smaller generators.** `generate use-case invoice archive` adds `ArchiveInvoice` (with a unit test and a fake
@@ -526,44 +552,44 @@ controller and registers it; `generate port mailer` adds a domain port, an in-me
 provides and exports it. Every generator takes `--dry-run`, which now prints a unified diff of exactly what would change
 (later steps see earlier ones, so the diff is the real result).
 
-**`nestrs doctor`** checks the project against its own architecture by parsing, not grepping: `domain` and
+**`purlin doctor`** checks the project against its own architecture by parsing, not grepping: `domain` and
 `application` must not reach `infrastructure`, `presentation` or `composition`, nor web/database crates
-(`axum`, `sea_orm`, `sqlx`, `redis`, `nestrs_http`, ..); `infrastructure` must not call back into `application` or
+(`axum`, `sea_orm`, `sqlx`, `redis`, `purlin_http`, ..); `infrastructure` must not call back into `application` or
 `presentation`; `presentation` must not touch `infrastructure`. It also flags controllers no `#[module]` registers
 (they compile, then 404). It exits non-zero, so CI can gate on it. Running it on the blog example found a seeder that
 drove use cases from `infrastructure`; it now lives in `composition`.
 
-**`nestrs generate contract`** writes the TypeScript oRPC contract from the Rust sources, read with `syn`: routes
+**`purlin generate contract`** writes the TypeScript oRPC contract from the Rust sources, read with `syn`: routes
 (`#[get("/{id}")]`), inputs (`Path`, `Query`, `ValidatedJson`, `PaginationPipe`), outputs (`Json<T>`,
 `EventStream<T>`, tuples with headers), documented failures (`#[response]`, guards, roles), and the DTOs with their
 serde (`rename_all`, `tag`, `default`, `skip`) and `validator` attributes (length, range, email, url). No build and no
 running server; the mount prefix is read from `.prefix("..")` in `main.rs`. Anything JSON cannot express (recursive or
 untagged types, foreign types, `impl IntoResponse`) is reported as a warning and that route is left out, never
 guessed; `--strict` fails on warnings and `--check` fails with a diff when the file is stale, for CI. `--also <dir>`
-adds source directories (the health controller lives in `nestrs-health`). `examples/react-orpc` now uses it
+adds source directories (the health controller lives in `purlin-health`). `examples/react-orpc` now uses it
 (`npm run gen`, `npm run check:contract`); the OpenAPI route stays as `npm run gen:openapi`.
 
-### Benchmarks and soak (`nestrs-bench`)
+### Benchmarks and soak (`purlin-bench`)
 
-`cargo bench -p nestrs-bench` measures `GET /hello` in process (no sockets) as plain axum, then nestrs with one more
+`cargo bench -p purlin-bench` measures `GET /hello` in process (no sockets) as plain axum, then purlin with one more
 feature per row. On the development machine (noisy, shared; compare neighbours, not absolutes):
 
 | Variant | time per request |
 |---|---|
 | axum (baseline) | 0.72 µs |
 | axum + 3 pass-through middlewares | 1.77 µs |
-| nestrs controller | 2.43 µs |
+| purlin controller | 2.43 µs |
 | + `Inject<T>` argument | 2.71 µs |
 | + bearer guard | 3.13 µs |
 | + 3 interceptors | 5.83 µs |
 | guard + role + 3 interceptors + rate limit | 10.1 µs |
 
-A nestrs app has a fixed cost of roughly 1.7 µs over bare axum, about two thirds of which is what three pass-through
+A purlin app has a fixed cost of roughly 1.7 µs over bare axum, about two thirds of which is what three pass-through
 axum middlewares cost (request scopes, filters, shutdown signal); each interceptor adds about 1 µs. Against any real
 handler or network round trip this is noise, but it is a measured number, not a promise.
 
-`cargo test -p nestrs-bench --test soak` drives every protective interceptor with mixed concurrent traffic (3 s by
-default; `SOAK_SECS=600 SOAK_WORKERS=64 cargo test -p nestrs-bench --release --test soak -- --nocapture` for a real
+`cargo test -p purlin-bench --test soak` drives every protective interceptor with mixed concurrent traffic (3 s by
+default; `SOAK_SECS=600 SOAK_WORKERS=64 cargo test -p purlin-bench --release --test soak -- --nocapture` for a real
 soak) and checks the contracts from outside: only allowed statuses, the bulkhead never over capacity, an idempotency
 key never runs a write twice, the cache stays bounded and spares the handler, the circuit breaker opens and recovers,
 metrics count every request exactly once, request ids are unique.
@@ -629,7 +655,7 @@ struct HealthChecker { indicators: Arc<Multi<dyn HealthIndicator>>, .. }   // se
   `Provider::multi::<dyn Port>()` to allow an empty one. Members are singletons without lifecycle hooks.
 - Tests replace the whole set: `.override_value(Multi::<dyn HealthIndicator>::new(vec![..]))`.
 
-`nestrs-health` builds on it: `imports = [HealthModule]` gives `GET /health/live` (always 200) and `GET /health/ready`
+`purlin-health` builds on it: `imports = [HealthModule]` gives `GET /health/live` (always 200) and `GET /health/ready`
 (200 when every critical indicator is up, otherwise 503 with per-check results in `error.details`). Checks run concurrently,
 each under a timeout (default 2 s) with panics contained. A `critical() == false` indicator only reports `degraded`. Once shutdown
 starts, readiness answers 503 `draining` so load balancers stop sending traffic before the server closes (`ShuttingDown` extractor).
@@ -663,7 +689,7 @@ exist and are visible. Filters are app-wide; the first one to return `Some(respo
 
 ## Configuration
 
-`nestrs-config` loads typed, validated settings once at startup, from (lowest priority first) your
+`purlin-config` loads typed, validated settings once at startup, from (lowest priority first) your
 type's `serde` defaults, TOML files, `PREFIX_`-prefixed environment variables (`__` nests) and explicit
 overrides:
 
@@ -698,7 +724,7 @@ return type means the verb's usual 201/204. A type without `ToSchema` still comp
 without a schema. Your crate needs a direct `utoipa` dependency for the derives. Call `app.openapi(&info)`
 to get the document as a value.
 
-## Testing with nestrs-testing
+## Testing with purlin-testing
 
 ```rust
 let app = TestApp::builder(AppModule)
@@ -720,13 +746,13 @@ response body.
 
 ## How the SOLID principles show up
 
-- **Single responsibility.** Each crate and each type has one job: `nestrs-core` wires,
-  `nestrs-macros` reads declarations, `nestrs-http` speaks HTTP. In an application, a
+- **Single responsibility.** Each crate and each type has one job: `purlin-core` wires,
+  `purlin-macros` reads declarations, `purlin-http` speaks HTTP. In an application, a
   controller translates HTTP, a service holds rules, a repository persists, a guard
   authorises, and domain errors stay free of HTTP (`From<UserError> for HttpError` is the
   single seam). `graph.rs` validates, `bootstrap.rs` builds, `container.rs` stores.
 - **Open/closed.** New behaviour is added, not edited in. A new transport implements
-  `Transport` and ships `ControllerEntry` values; `nestrs-core` never changes. New guards,
+  `Transport` and ships `ControllerEntry` values; `purlin-core` never changes. New guards,
   providers and modules are new types. `#[module]` is just sugar over `ModuleDef`'s public
   builder, so modules can be written by hand or generated.
 - **Liskov substitution.** Anything bound with `#[injectable(provides = UserRepositoryPort)]` is
@@ -740,7 +766,7 @@ response body.
 - **Dependency inversion.** High-level code depends on abstractions and a composition root
   picks implementations. `RegisterUser` holds `UserRepositoryPort`; `BearerAuth` holds
   `TokenVerifierPort`; the `provides = ..` attribute or provider function in the composition
-  layer is the only place a concrete type is named. Even the framework follows this: `nestrs-core` depends on no HTTP crate, and
+  layer is the only place a concrete type is named. Even the framework follows this: `purlin-core` depends on no HTTP crate, and
   the HTTP crate plugs in through the `Transport` trait. Overrides are dependency inversion
   put to work: tests replace an abstraction's implementation without editing any module.
 
@@ -802,10 +828,10 @@ Choices worth knowing:
 ## Workspace layout
 
 ```
-nestrs/
+purlin/
 ├── Cargo.toml                    workspace: shared versions, lints, dependency table
 ├── crates/
-│   ├── nestrs-core/              no HTTP, no macros: the DI + module engine
+│   ├── purlin-core/              no HTTP, no macros: the DI + module engine
 │   │   ├── src/
 │   │   │   ├── lib.rs            public surface and crate docs
 │   │   │   ├── token.rs          Token: TypeId identity (works for dyn Trait) + readable names
@@ -825,9 +851,9 @@ nestrs/
 │   │       ├── composition.rs    overrides, configured modules, global modules
 │   │       ├── lifecycle.rs      init/destroy ordering, failures, idempotent shutdown
 │   │       └── scopes.rs         request/transient lifetimes and the lifetime rule
-│   ├── nestrs-macros/            proc-macro crate (Rust requires it to be separate)
+│   ├── purlin-macros/            proc-macro crate (Rust requires it to be separate)
 │   │   └── src/{lib.rs, injectable.rs, controller.rs, module.rs, util.rs}
-│   ├── nestrs-http/              Axum adapter; the only crate that knows axum
+│   ├── purlin-http/              Axum adapter; the only crate that knows axum
 │   │   └── src/
 │   │       ├── lib.rs · app.rs   App, AppBuilder (overrides, filters), serve_openapi
 │   │       ├── controller.rs     HttpTransport, HttpController, mount
@@ -835,26 +861,26 @@ nestrs/
 │   │       ├── scope.rs          request scopes, Inject<T>, RequestInfo, HttpModule
 │   │       ├── openapi.rs        RouteDoc, utoipa-based document builder
 │   │       └── validation.rs · error.rs · path.rs
-│   ├── nestrs-kit/      reusable plumbing: Service (the `main`), TimingInterceptor, ErrorLogFilter,
+│   ├── purlin-kit/      reusable plumbing: Service (the `main`), TimingInterceptor, ErrorLogFilter,
 │   │                    RequestContext, Pagination + PaginationPipe, KitModule
-│   ├── nestrs-interceptors/ circuit breaker, bulkhead, retry, cache, ETag, single-flight, idempotency,
+│   ├── purlin-interceptors/ circuit breaker, bulkhead, retry, cache, ETag, single-flight, idempotency,
 │   │                    request id, metrics, trace context, audit, security headers, tenant/locale/version
-│   ├── nestrs-redis/    RedisConnection, rate limit / cache / idempotency stores, RedisIndicator,
+│   ├── purlin-redis/    RedisConnection, rate limit / cache / idempotency stores, RedisIndicator,
 │   │                    RedisEventStream, RedisJobLock, RedisQueueBackend, RedisValueStore
-│   ├── nestrs-jobs/     Job + Schedule (interval/cron), JobLock, Queue + QueueHandler + QueueBackend, JobsModule
-│   ├── nestrs-sea-orm/  Database (lifecycle), Executor, Transactional, UnitOfWork, Migrations port,
+│   ├── purlin-jobs/     Job + Schedule (interval/cron), JobLock, Queue + QueueHandler + QueueBackend, JobsModule
+│   ├── purlin-sea-orm/  Database (lifecycle), Executor, Transactional, UnitOfWork, Migrations port,
 │   │                    DatabaseIndicator, SeaOrmModule
-│   ├── nestrs-outbox/   Outbox (in-transaction writer), OutboxStore/Publisher ports, OutboxRelay,
+│   ├── purlin-outbox/   Outbox (in-transaction writer), OutboxStore/Publisher ports, OutboxRelay,
 │   │                    SeaOutboxStore, CreateOutbox, QueuePublisher, OutboxModule
-│   ├── nestrs-otel/     Telemetry (OTLP), HttpTracing interceptor, OtelPropagation for queues
-│   ├── nestrs-cache/    ValueStore port, MemoryValueStore, ServiceCache (single-flight read-through)
-│   ├── nestrs-cli/      the `nestrs` command: `new`, `generate feature|use-case|controller|port|contract`, `doctor`
-│   ├── nestrs-bench/    overhead benchmarks vs plain axum, full-stack soak test
-│   ├── nestrs-jwt/      JwtAuthenticator (Authenticator port), KeySource + StaticKeys (HMAC/PEM/JWKS), claim mapping
-│   ├── nestrs-health/   HealthIndicator port, HealthChecker, /health/live + /health/ready, HealthModule
-│   ├── nestrs-config/            ConfigSource (defaults/files/env), ConfigModule::for_root::<T>
-│   ├── nestrs-testing/           TestApp, TestAppBuilder, TestClient, TestResponse
-│   └── nestrs/                   facade: re-exports + prelude; what apps depend on
+│   ├── purlin-otel/     Telemetry (OTLP), HttpTracing interceptor, OtelPropagation for queues
+│   ├── purlin-cache/    ValueStore port, MemoryValueStore, ServiceCache (single-flight read-through)
+│   ├── purlin-cli/      the `purlin` command: `new`, `generate feature|use-case|controller|port|contract`, `doctor`
+│   ├── purlin-bench/    overhead benchmarks vs plain axum, full-stack soak test
+│   ├── purlin-jwt/      JwtAuthenticator (Authenticator port), KeySource + StaticKeys (HMAC/PEM/JWKS), claim mapping
+│   ├── purlin-health/   HealthIndicator port, HealthChecker, /health/live + /health/ready, HealthModule
+│   ├── purlin-config/            ConfigSource (defaults/files/env), ConfigModule::for_root::<T>
+│   ├── purlin-testing/           TestApp, TestAppBuilder, TestClient, TestResponse
+│   └── purlin/                   facade: re-exports + prelude; what apps depend on
 │       ├── src/lib.rs
 │       └── tests/
 │           ├── macros.rs         end-to-end: macros -> bootstrap -> router
@@ -870,11 +896,11 @@ nestrs/
     │   ├── application/          use cases (RegisterUser, PublishPost, ..), TokenVerifier port,
     │   │                         ApplicationError. Plain structs with `new(..)`; fakes in testing.rs
     │   ├── infrastructure/       adapters: persistence/ (in-memory + SeaORM repos, entities and
-    │   │                         sea_orm/migrations/; the pool comes from nestrs-sea-orm), auth.rs, config.rs
+    │   │                         sea_orm/migrations/; the pool comes from purlin-sea-orm), auth.rs, config.rs
     │   ├── presentation/http/    controllers, DTOs (ToSchema), kit Pagination -> domain Page,
     │   │                         ApplicationError -> HttpError
-    │   └── composition/          nestrs modules: Persistence (picks adapters from config), Auth,
-    │                             Users, Posts, App (imports nestrs-kit's KitModule)
+    │   └── composition/          purlin modules: Persistence (picks adapters from config), Auth,
+    │                             Users, Posts, App (imports purlin-kit's KitModule)
     └── tests/
         ├── api.rs                black-box tests: API, pagination pipe, interceptor, scopes, OpenAPI
         ├── overrides.rs          overrides, invalid config, the seeder as an init hook
@@ -885,7 +911,7 @@ nestrs/
 
 **Why this shape.**
 
-- *Crates split along dependency direction:* `core` <- `http` <- `nestrs`, with `macros`
+- *Crates split along dependency direction:* `core` <- `http` <- `purlin`, with `macros`
   beside them. `core` can be reused (or tested) with no web stack; the proc-macro crate must
   be separate; the facade gives users one dependency and one version to track.
 - *Feature folders, not layer folders (`users/`, `posts/` instead of `controllers/`,
@@ -917,9 +943,9 @@ curl -X POST localhost:3000/api/users \
      -d '{"name":"Ada","email":"ada@example.com"}'
 ```
 
-## Database: nestrs-sea-orm
+## Database: purlin-sea-orm
 
-`nestrs-sea-orm` is the persistence kit: the part of "use SeaORM" that is the same in every service.
+`purlin-sea-orm` is the persistence kit: the part of "use SeaORM" that is the same in every service.
 
 | Piece | Job |
 |---|---|
@@ -976,7 +1002,7 @@ registered in `Migrator`) and run once per database, recorded in `seaql_migratio
 
 The crate enables no driver; turn on its `sqlite`, `postgres` or `mysql` feature.
 
-## Transactional outbox: nestrs-outbox
+## Transactional outbox: purlin-outbox
 
 Publishing an event after committing (or before) is a dual write: a crash between the two loses the
 event or announces something that never happened. The outbox records the event **in the same
@@ -1003,7 +1029,7 @@ if self.announced.record(&envelope.id, envelope.payload) { /* first time */ }
 | `Outbox` | records a message with any `Executor` (so it joins your transaction) |
 | `CreateOutbox` | the migration; add it to your `Migrator` |
 | `OutboxStore` / `SeaOutboxStore` / `MemoryOutboxStore` | the relay's port, its SeaORM adapter, and a test double |
-| `OutboxPublisher` / `QueuePublisher` | where messages go; the adapter feeds a `nestrs-jobs` queue named after the topic |
+| `OutboxPublisher` / `QueuePublisher` | where messages go; the adapter feeds a `purlin-jobs` queue named after the topic |
 | `OutboxRelay` | claims, publishes, retries with back-off, buries; stops within `shutdown_grace` |
 | `OutboxModule::for_root` / `with_config` | wires the relay; it imports the modules that provide the two ports |
 
@@ -1035,11 +1061,11 @@ In the blog, publishing a post in database mode records `post.published` through
 
 [`docs/tutorial/`](docs/tutorial/README.md) builds the blog in nine chapters (layers, domain, use cases, HTTP, wiring,
 persistence, outbox and traces, testing, shipping). Quoted code is checked against `examples/blog-api` by
-`cargo test -p nestrs-cli --test tutorial`.
+`cargo test -p purlin-cli --test tutorial`.
 
-## Observability: nestrs-otel
+## Observability: purlin-otel
 
-Framework crates emit plain `tracing` spans; `nestrs-otel` turns them into OpenTelemetry traces. HTTP requests
+Framework crates emit plain `tracing` spans; `purlin-otel` turns them into OpenTelemetry traces. HTTP requests
 get a server span named after the route *template*, jobs and queue handlers get spans, and the trace follows a
 message through the queue, so a worker's span is a child of the request that enqueued the work.
 

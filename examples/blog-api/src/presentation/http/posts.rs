@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nestrs::prelude::*;
+use purlin::prelude::*;
 use uuid::Uuid;
 
 use super::dto::{CreatePostRequest, PostEventDto, PostResponse};
@@ -8,10 +8,10 @@ use super::idempotent::IdempotentWrites;
 use super::page::to_page;
 use crate::application::{DeletePost, GetPost, ListPosts, PublishPost, WatchPosts};
 use crate::domain::{EventCursor, Sequenced};
-use nestrs::http::BearerAuth;
-use nestrs_interceptors::{ETag, SecurityHeaders};
-use nestrs_kit::{PaginationPipe, TimingInterceptor};
-use nestrs_sea_orm::Transactional;
+use purlin::http::BearerAuth;
+use purlin_interceptors::{ETag, SecurityHeaders};
+use purlin_kit::{PaginationPipe, TimingInterceptor};
+use purlin_sea_orm::Transactional;
 
 /// HTTP surface of the posts use cases. Reads are public; writes need a token.
 #[injectable]
@@ -47,7 +47,7 @@ impl PostsController {
     async fn events(&self, last: LastEventId) -> EventStream<PostEventDto> {
         // A missing or malformed id is not an error: the client just gets a live stream.
         let subscription = self.watch.execute(last.parse::<EventCursor>()).await;
-        EventStream::from_events(nestrs::http::stream::unfold(subscription, |mut feed| async move {
+        EventStream::from_events(purlin::http::stream::unfold(subscription, |mut feed| async move {
             let Sequenced { cursor, event } = feed.next().await?;
             Some((Ok(Event::with_id(cursor, PostEventDto::from(event))), feed))
         }))

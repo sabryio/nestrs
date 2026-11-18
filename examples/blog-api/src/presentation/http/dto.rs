@@ -6,7 +6,7 @@
 //! enforces the same invariants independently, so use cases stay correct when
 //! called from somewhere other than HTTP.
 
-use nestrs::openapi::ToSchema;
+use purlin::openapi::ToSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;

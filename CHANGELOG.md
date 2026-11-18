@@ -10,8 +10,16 @@ All crates in the workspace share one version and are released together.
 ## [Unreleased]
 
 ### Changed
+- **Renamed the project from `nestrs` to `purlin`.** Every crate is now `purlin*` (`purlin`, `purlin-core`,
+  `purlin-http`, `purlin-cli`, ...), the binary is `purlin`, Rust paths are `purlin_*`, and the outbox table is
+  `purlin_outbox`. The headless DI/runtime layer ships separately as `rust-fx` (library `fx`).
 - Minimum supported Rust version is **1.89** (it was declared as 1.85, which the dependency
   tree never actually built with).
+- The `purlin` facade has an `http` feature (default on). Without it there is no `axum`, `hyper` or
+  `tower`: `purlin-jobs`, `purlin-cache` and `purlin-outbox` are headless, and `purlin-health` and
+  `purlin-sea-orm` are headless with `default-features = false` (the health routes and the per-request
+  `Transactional` interceptor are behind their own `http` feature). `purlin` re-exports `rust-fx` as `purlin::fx`.
+  `scripts/check-headless.sh` enforces it in CI.
 
 ### Added
 - `rust-fx` (library `fx`): a headless, fx-style application framework with no HTTP dependency.
@@ -22,26 +30,26 @@ All crates in the workspace share one version and are released together.
 - `rust-fx-macros`: `#[fx::component]`, `#[fx::module]`, `#[derive(fx::Params)]`,
   `#[derive(fx::Component)]`.
 - `rust-fx/examples/worker.rs`: a worker with no web stack.
-- **`nestrs-sea-orm`**: managed SeaORM connection with lifecycle hooks, migrations behind a port,
+- **`purlin-sea-orm`**: managed SeaORM connection with lifecycle hooks, migrations behind a port,
   health indicator, `Executor`, per-request `Transactional` interceptor, `UnitOfWork` and
   `Database::in_transaction`. The blog example uses it instead of its own wrapper.
-- **`nestrs-outbox`**: transactional outbox. `Outbox` records events through the request's
+- **`purlin-outbox`**: transactional outbox. `Outbox` records events through the request's
   transaction; `OutboxRelay` delivers at least once with per-key ordering, exponential back-off, dead
   letters and lease-based claims; `SeaOutboxStore`, `MemoryOutboxStore`, `QueuePublisher`,
   `CreateOutbox`, `OutboxModule`. The blog announces published posts through it.
-- **`nestrs-otel`**: OpenTelemetry adapter. `Telemetry` (OTLP/HTTP export, parent-based ratio
+- **`purlin-otel`**: OpenTelemetry adapter. `Telemetry` (OTLP/HTTP export, parent-based ratio
   sampling), `HttpTracing` server-span interceptor, `OtelPropagation` for W3C trace context through
-  queues. `nestrs-jobs` now emits `job <name>` and `<queue> process` spans and carries an optional
+  queues. `purlin-jobs` now emits `job <name>` and `<queue> process` spans and carries an optional
   `traceparent` in queue envelopes (`TracePropagation` port, `JobsConfig::propagation`);
-  `nestrs-outbox` emits `outbox.publish`. `JobsModule::in_memory_with` and `Service::without_logging`
+  `purlin-outbox` emits `outbox.publish`. `JobsModule::in_memory_with` and `Service::without_logging`
   support custom configuration. The blog exports traces when `BLOG_OTLP_ENDPOINT` is set.
-- **`nestrs-cli`**: `generate contract` (TypeScript oRPC contract from the Rust controllers and DTOs, via
+- **`purlin-cli`**: `generate contract` (TypeScript oRPC contract from the Rust controllers and DTOs, via
   `syn`; `--check`, `--strict`, `--also`), `generate use-case|controller|port`, `doctor` (layer-rule and
   unregistered-controller checks), and `--dry-run` now prints a unified diff computed on an in-memory overlay.
   `Workspace` gained `rust_files`. `Service::without_logging`. The blog's demo seeder moved from
   `infrastructure` to `composition` (found by `doctor`); `examples/react-orpc` generates its contract with the CLI.
 - **Tutorial** (`docs/tutorial/`): nine chapters building the blog, with a test that fails when a quoted block drifts
-  from `examples/blog-api`. CI runs `nestrs doctor` and `generate contract --check --strict` on the blog.
+  from `examples/blog-api`. CI runs `purlin doctor` and `generate contract --check --strict` on the blog.
 - Crate metadata (keywords, categories, homepage, readme), license files and a README for every
   published crate.
 - `RELEASING.md`, a release workflow that publishes in dependency order, and CI jobs for MSRV,
@@ -64,6 +72,6 @@ First feature-complete version.
 - **Cache**: single-flight read-through service cache.
 - **Redis**: rate limiting, response cache, idempotency, job locks, queue backend, value store,
   event bus, health indicator.
-- **CLI**: `nestrs new` and `nestrs generate feature|module|job|queue-handler`, editing existing
+- **CLI**: `purlin new` and `purlin generate feature|module|job|queue-handler`, editing existing
   Rust files by parsing them.
 - **Quality**: benchmarks against plain axum and a full-stack soak test.

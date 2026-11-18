@@ -1,7 +1,7 @@
 //! SeaORM adapters for the repository ports.
 //!
 //! The connection, transactions, migrations runner and health check come from
-//! `nestrs-sea-orm`; this module holds only what is specific to the blog: entities, the
+//! `purlin-sea-orm`; this module holds only what is specific to the blog: entities, the
 //! migrations themselves and the repositories.
 
 mod entities;
@@ -13,7 +13,7 @@ pub use migrations::Migrator;
 pub use posts::SeaPostRepository;
 pub use users::SeaUserRepository;
 
-use nestrs_sea_orm::{Database, Executor};
+use purlin_sea_orm::{Database, Executor};
 
 use crate::domain::RepositoryError;
 

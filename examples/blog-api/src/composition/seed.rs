@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use nestrs::prelude::*;
+use purlin::prelude::*;
 
 use crate::application::{PublishPost, PublishPostCommand, RegisterUser, RegisterUserCommand};
 use crate::infrastructure::config::AppConfig;

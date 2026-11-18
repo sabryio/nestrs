@@ -1,0 +1,31 @@
+[package]
+name = "purlin-interceptors"
+description = "A catalogue of production interceptors for purlin: resilience, caching, idempotency, observability, HTTP hygiene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+purlin-core.workspace = true
+purlin-http.workspace = true
+http-body = "1"
+http-body-util.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tower.workspace = true
+
+[lints]
+workspace = true

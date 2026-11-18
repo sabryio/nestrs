@@ -1,4 +1,4 @@
-//! Swapping providers in the real `AppModule`, and lifecycle hooks, with `nestrs-testing`.
+//! Swapping providers in the real `AppModule`, and lifecycle hooks, with `purlin-testing`.
 
 use std::sync::Arc;
 
@@ -6,9 +6,9 @@ use async_trait::async_trait;
 use blog_api::AppModule;
 use blog_api::domain::{Email, Page, RepositoryError, User, UserName, UserRepository, UserRepositoryPort};
 use blog_api::infrastructure::config::AppConfig;
-use nestrs::http::axum::http::StatusCode;
-use nestrs::prelude::*;
-use nestrs_testing::TestApp;
+use purlin::http::axum::http::StatusCode;
+use purlin::prelude::*;
+use purlin_testing::TestApp;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -140,7 +140,7 @@ async fn nothing_is_seeded_by_default() {
 #[tokio::test]
 async fn invalid_configuration_stops_startup() {
     // The real config module, fed an impossible value through its own source.
-    use nestrs::config::{ConfigModule, ConfigSource};
+    use purlin::config::{ConfigModule, ConfigSource};
 
     #[module(imports = [ConfigModule::for_root::<AppConfig>(ConfigSource::new().set("api_token", ""))])]
     struct Misconfigured;

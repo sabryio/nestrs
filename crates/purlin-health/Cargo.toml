@@ -1,0 +1,40 @@
+[package]
+name = "purlin-health"
+description = "Liveness and readiness probes for purlin, with pluggable health indicators"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[features]
+default = ["http"]
+## `HealthController` and the `/health/live`, `/health/ready` routes. Without it the crate is
+## just the indicator port and the checker, usable by headless services.
+http = ["purlin/http", "dep:utoipa"]
+
+[dependencies]
+purlin.workspace = true
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+purlin-testing.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "probes"
+required-features = ["http"]

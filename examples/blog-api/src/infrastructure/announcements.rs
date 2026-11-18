@@ -3,10 +3,10 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use nestrs::prelude::*;
-use nestrs_jobs::{HandlerError, QueueHandler, QueueHandlerPort, decode};
-use nestrs_outbox::{Outbox, OutboxEnvelope};
-use nestrs_sea_orm::Database;
+use purlin::prelude::*;
+use purlin_jobs::{HandlerError, QueueHandler, QueueHandlerPort, decode};
+use purlin_outbox::{Outbox, OutboxEnvelope};
+use purlin_sea_orm::Database;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

@@ -19,7 +19,7 @@ publishing; nothing else in this document changes.
 
 `scripts/publish-order.sh` prints it, computed from `cargo metadata` (a crate comes after every
 crate it depends on, dev-dependencies with a version included), so it cannot drift from the
-manifests. `nestrs-bench` and the examples are `publish = false` and are skipped.
+manifests. `purlin-bench` and the examples are `publish = false` and are skipped.
 
 ## Checklist
 
@@ -27,9 +27,9 @@ manifests. `nestrs-bench` and the examples are `publish = false` and are skipped
 2. Bump `[workspace.package] version` and every `version = ".."` in `[workspace.dependencies]`.
 3. `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings`
 4. `cargo test --workspace` (with `redis-server` installed and `REQUIRE_REDIS=1`)
-5. `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --exclude nestrs-bench`
-6. `cargo semver-checks --workspace --exclude nestrs-bench --exclude nestrs-cli --exclude blog-api --exclude todo-minimal`
-   (`nestrs-cli`'s library is internal and not covered by semver.)
+5. `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --exclude purlin-bench`
+6. `cargo semver-checks --workspace --exclude purlin-bench --exclude purlin-cli --exclude blog-api --exclude todo-minimal`
+   (`purlin-cli`'s library is internal and not covered by semver.)
 7. Tag `vX.Y.Z` and push. The `release` workflow re-runs the checks and publishes in order.
 
 ## Public API rules

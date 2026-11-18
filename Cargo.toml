@@ -1,28 +1,29 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/nestrs-cache",
-    "crates/nestrs-core",
-    "crates/nestrs-macros",
-    "crates/nestrs-http",
-    "crates/nestrs-bench",
-    "crates/nestrs-cli",
-    "crates/nestrs-config",
-    "crates/nestrs-health",
-    "crates/nestrs-interceptors",
-    "crates/nestrs-jobs",
-    "crates/nestrs-jwt",
-    "crates/nestrs-kit",
-    "crates/nestrs-otel",
-    "crates/nestrs-outbox",
-    "crates/nestrs-redis",
-    "crates/nestrs-sea-orm",
-    "crates/nestrs-testing",
+    "crates/purlin-cache",
+    "crates/purlin-core",
+    "crates/purlin-macros",
+    "crates/purlin-http",
+    "crates/purlin-bench",
+    "crates/purlin-cli",
+    "crates/purlin-config",
+    "crates/purlin-health",
+    "crates/purlin-interceptors",
+    "crates/purlin-jobs",
+    "crates/purlin-jwt",
+    "crates/purlin-kit",
+    "crates/purlin-otel",
+    "crates/purlin-outbox",
+    "crates/purlin-redis",
+    "crates/purlin-sea-orm",
+    "crates/purlin-testing",
     "crates/rust-fx",
     "crates/rust-fx-macros",
-    "crates/nestrs",
+    "crates/purlin",
     "examples/blog-api",
     "examples/todo-minimal",
+    "examples/headless-worker",
 ]
 
 [workspace.package]
@@ -30,31 +31,31 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.89"
-repository = "https://github.com/sabry-awad97/nestrs"
-homepage = "https://github.com/sabry-awad97/nestrs"
-documentation = "https://docs.rs/nestrs"
+repository = "https://github.com/sabry-awad97/purlin"
+homepage = "https://github.com/sabry-awad97/purlin"
+documentation = "https://docs.rs/purlin"
 authors = ["Sabry Awad"]
 keywords = ["nestjs", "axum", "dependency-injection", "web", "framework"]
 categories = ["web-programming", "web-programming::http-server"]
 
 [workspace.dependencies]
 # Internal crates
-nestrs-cache = { path = "crates/nestrs-cache", version = "0.1.0" }
-nestrs-core = { path = "crates/nestrs-core", version = "0.1.0" }
-nestrs-macros = { path = "crates/nestrs-macros", version = "0.1.0" }
-nestrs-http = { path = "crates/nestrs-http", version = "0.1.0" }
-nestrs-testing = { path = "crates/nestrs-testing", version = "0.1.0" }
-nestrs-config = { path = "crates/nestrs-config", version = "0.1.0" }
-nestrs-health = { path = "crates/nestrs-health", version = "0.1.0" }
-nestrs-interceptors = { path = "crates/nestrs-interceptors", version = "0.1.0" }
-nestrs-jobs = { path = "crates/nestrs-jobs", version = "0.1.0" }
-nestrs-jwt = { path = "crates/nestrs-jwt", version = "0.1.0" }
-nestrs-redis = { path = "crates/nestrs-redis", version = "0.1.0" }
-nestrs-kit = { path = "crates/nestrs-kit", version = "0.1.0" }
-nestrs-otel = { path = "crates/nestrs-otel", version = "0.1.0" }
-nestrs-outbox = { path = "crates/nestrs-outbox", version = "0.1.0" }
-nestrs-sea-orm = { path = "crates/nestrs-sea-orm", version = "0.1.0" }
-nestrs = { path = "crates/nestrs", version = "0.1.0" }
+purlin-cache = { path = "crates/purlin-cache", version = "0.1.0" }
+purlin-core = { path = "crates/purlin-core", version = "0.1.0" }
+purlin-macros = { path = "crates/purlin-macros", version = "0.1.0" }
+purlin-http = { path = "crates/purlin-http", version = "0.1.0" }
+purlin-testing = { path = "crates/purlin-testing", version = "0.1.0" }
+purlin-config = { path = "crates/purlin-config", version = "0.1.0" }
+purlin-health = { path = "crates/purlin-health", version = "0.1.0", default-features = false }
+purlin-interceptors = { path = "crates/purlin-interceptors", version = "0.1.0" }
+purlin-jobs = { path = "crates/purlin-jobs", version = "0.1.0" }
+purlin-jwt = { path = "crates/purlin-jwt", version = "0.1.0" }
+purlin-redis = { path = "crates/purlin-redis", version = "0.1.0" }
+purlin-kit = { path = "crates/purlin-kit", version = "0.1.0" }
+purlin-otel = { path = "crates/purlin-otel", version = "0.1.0" }
+purlin-outbox = { path = "crates/purlin-outbox", version = "0.1.0" }
+purlin-sea-orm = { path = "crates/purlin-sea-orm", version = "0.1.0", default-features = false }
+purlin = { path = "crates/purlin", version = "0.1.0", default-features = false }
 rust-fx = { path = "crates/rust-fx", version = "0.1.0" }
 rust-fx-macros = { path = "crates/rust-fx-macros", version = "0.1.0" }
 

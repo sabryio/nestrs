@@ -1,8 +1,8 @@
-//! A complete nestrs application in one file: a todo list over HTTP.
+//! A complete purlin application in one file: a todo list over HTTP.
 //!
 //! ```text
 //! cargo run -p todo-minimal
-//! curl -X POST localhost:3000/todos -H 'content-type: application/json' -d '{"title":"learn nestrs"}'
+//! curl -X POST localhost:3000/todos -H 'content-type: application/json' -d '{"title":"learn purlin"}'
 //! curl localhost:3000/todos
 //! curl -X POST localhost:3000/todos/1/complete
 //! curl localhost:3000/summary
@@ -10,7 +10,7 @@
 
 use std::sync::Mutex;
 
-use nestrs::prelude::*;
+use purlin::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // ── 1. Data ─────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ impl TodoController {
 // ── 5. `Inject<T>`: take a service for one handler instead of a field ──────
 // A controller field suits a service every route uses. `Inject<T>` suits one handler
 // that needs something extra, and the only way to get a request-scoped provider.
-// It is nestrs's answer to axum's `State`: resolved by type, and checked at startup
+// It is purlin's answer to axum's `State`: resolved by type, and checked at startup
 // (a missing or invisible `T` is a startup error, not a 500).
 
 #[derive(Serialize)]
@@ -142,7 +142,7 @@ async fn main() -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    use nestrs_testing::TestApp;
+    use purlin_testing::TestApp;
     use serde_json::{Value, json};
 
     use super::*;
@@ -154,7 +154,7 @@ mod tests {
 
         client
             .post("/todos")
-            .json(&json!({ "title": "learn nestrs" }))
+            .json(&json!({ "title": "learn purlin" }))
             .send()
             .await
             .assert_status(StatusCode::CREATED);
@@ -165,7 +165,7 @@ mod tests {
             .assert_status(StatusCode::OK);
 
         let todos: Value = client.get("/todos").send().await.json();
-        assert_eq!(todos[0]["title"], "learn nestrs");
+        assert_eq!(todos[0]["title"], "learn purlin");
         assert_eq!(todos[0]["done"], true);
     }
 

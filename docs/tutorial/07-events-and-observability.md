@@ -25,7 +25,7 @@ pub trait PostAnnouncements {
 ```
 
 The use case calls it right after storing the post (chapter 3, `post_published`). The database adapter writes a row through
-the request's transaction, so a rolled-back request leaves no announcement. A relay (`nestrs-outbox`) polls, claims rows
+the request's transaction, so a rolled-back request leaves no announcement. A relay (`purlin-outbox`) polls, claims rows
 with leases, publishes them to the queue with retries and backoff, and parks poison messages as dead letters.
 
 The queue and the consumer are wired in one module:
@@ -33,7 +33,7 @@ The queue and the consumer are wired in one module:
 <!-- source: examples/blog-api/src/composition/messaging_module.rs -->
 ```rust
 /// Where announcements go: a queue, and the consumer of that queue. The queue is in-process
-/// here; swapping it for Redis (`nestrs-redis`) changes this module only.
+/// here; swapping it for Redis (`purlin-redis`) changes this module only.
 #[module(
     imports = [JobsModule::in_memory_with(jobs_config())],
     providers = [QueuePublisher, Announced, PostPublishedHandler],
@@ -66,7 +66,7 @@ async fn a_post_that_is_refused_is_not_announced() {
 
 ## Traces
 
-`nestrs-otel` turns the framework's `tracing` spans into OpenTelemetry traces. HTTP requests get a server span named after
+`purlin-otel` turns the framework's `tracing` spans into OpenTelemetry traces. HTTP requests get a server span named after
 the route *template* (`GET /posts/{id}`), a queue handler's span is a child of the request that enqueued the message, and
 failures mark the span as an error. The service enables it with one environment variable:
 

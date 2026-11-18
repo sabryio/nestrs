@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use nestrs::prelude::*;
+use purlin::prelude::*;
 use tokio::sync::broadcast::{self, error::RecvError};
 
 use crate::domain::{EventCursor, PostEvent, PostEvents, PostSubscription, Sequenced};

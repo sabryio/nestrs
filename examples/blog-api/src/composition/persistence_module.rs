@@ -1,6 +1,6 @@
-use nestrs::prelude::*;
-use nestrs_outbox::{OutboxStorePort, SeaOutboxStore};
-use nestrs_sea_orm::{Database, DatabaseConfig, SeaOrmModule, Transactional};
+use purlin::prelude::*;
+use purlin_outbox::{OutboxStorePort, SeaOutboxStore};
+use purlin_sea_orm::{Database, DatabaseConfig, SeaOrmModule, Transactional};
 
 use crate::domain::{PostAnnouncementsPort, PostRepositoryPort, UserRepositoryPort};
 use crate::infrastructure::announcements::{NoAnnouncements, OutboxPostAnnouncements};
@@ -54,7 +54,7 @@ fn post_announcements(config: Arc<AppConfig>, database: Arc<Database>) -> PostAn
 ///
 /// Importers get the two ports and the [`Transactional`] interceptor; the concrete adapters
 /// stay private. The connection, its migrations, its readiness check and its shutdown come
-/// from `nestrs_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
+/// from `purlin_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
 #[module(
     imports = [SeaOrmModule::with_migrator::<Migrator>(database_config())],
     providers = [user_repository, post_repository, post_announcements, SeaOutboxStore],

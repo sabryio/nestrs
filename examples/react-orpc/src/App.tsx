@@ -8,7 +8,7 @@ import { describeError } from "./errors-ui";
 export function App() {
   return (
     <main>
-      <h1>nestrs · oRPC · TanStack Query</h1>
+      <h1>purlin · oRPC · TanStack Query</h1>
       <p className="lede">
         A typed client built from a contract, talking to a Rust (Axum) server over plain REST and
         Server-Sent Events.

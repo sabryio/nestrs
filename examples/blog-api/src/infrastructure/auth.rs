@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use nestrs::BoxFuture;
-use nestrs::http::{AuthError, Authenticator, AuthenticatorPort, Principal, StaticTokens};
-use nestrs::prelude::*;
+use purlin::BoxFuture;
+use purlin::http::{AuthError, Authenticator, AuthenticatorPort, Principal, StaticTokens};
+use purlin::prelude::*;
 
 use super::config::AppConfig;
 

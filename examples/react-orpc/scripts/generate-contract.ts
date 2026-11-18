@@ -18,7 +18,7 @@
  *   - `.errors({...})` from the 4xx/5xx responses: the status picks oRPC's error code
  *     (404 → NOT_FOUND), the error envelope's body becomes the error's typed `data`.
  *
- * It supports the OpenAPI 3.1 subset the nestrs generator emits and stops with a
+ * It supports the OpenAPI 3.1 subset the purlin generator emits and stops with a
  * pointed message on anything else, rather than silently emitting `z.any()`.
  */
 import { COMMON_ERROR_STATUS_MAP } from "@orpc/client";
@@ -269,7 +269,7 @@ const codeForStatus = new Map<number, string>(
 
 /**
  * `.errors` map source for an operation's 4xx/5xx responses, or `undefined` when it
- * declares none. Every error response must use the nestrs envelope
+ * declares none. Every error response must use the purlin envelope
  * (`{ error: <body> }`); the body schema becomes the error's `data`.
  */
 function emitErrors(responses: Json, where: string, spec: Json): string | undefined {

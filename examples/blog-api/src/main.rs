@@ -1,4 +1,4 @@
-//! Entry point: a thin wrapper over `nestrs-kit`'s [`Service`].
+//! Entry point: a thin wrapper over `purlin-kit`'s [`Service`].
 //!
 //! `blog-api --print-openapi` prints the OpenAPI document and exits; the React example
 //! generates its contract from it.
@@ -9,11 +9,11 @@ use std::time::Duration;
 use blog_api::AppModule;
 use blog_api::infrastructure::config::AppConfig;
 
-use nestrs::http::RateLimitStore;
-use nestrs::prelude::*;
-use nestrs_interceptors::{Metrics, PrometheusRegistry, RequestId, SlowRequestLog};
-use nestrs_kit::Service;
-use nestrs_otel::{HttpTracing, OtelConfig, Telemetry};
+use purlin::http::RateLimitStore;
+use purlin::prelude::*;
+use purlin_interceptors::{Metrics, PrometheusRegistry, RequestId, SlowRequestLog};
+use purlin_kit::Service;
+use purlin_otel::{HttpTracing, OtelConfig, Telemetry};
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 

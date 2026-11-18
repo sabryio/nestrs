@@ -1,12 +1,12 @@
-use nestrs::prelude::*;
-use nestrs_kit::KitModule;
+use purlin::prelude::*;
+use purlin_kit::KitModule;
 
 use super::{
     MessagingModule, PersistenceModule, PostsModule, SeedModule, SharedStateModule, UsersModule, outbox_relay,
 };
 use crate::infrastructure::config::AppConfig;
-use nestrs::config::{ConfigModule, ConfigSource};
-use nestrs_health::HealthModule;
+use purlin::config::{ConfigModule, ConfigSource};
+use purlin_health::HealthModule;
 
 /// Root module. To move to a real database, set `BLOG_STORAGE=database`; the
 /// provider functions in [`PersistenceModule`] pick the adapters and nothing else

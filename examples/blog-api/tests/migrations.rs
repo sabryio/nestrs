@@ -3,16 +3,16 @@
 
 use blog_api::AppModule;
 use blog_api::infrastructure::config::{AppConfig, Storage};
-use nestrs::http::axum::http::StatusCode;
-use nestrs_sea_orm::Database;
-use nestrs_testing::TestApp;
+use purlin::http::axum::http::StatusCode;
+use purlin_sea_orm::Database;
+use purlin_testing::TestApp;
 use sea_orm::ConnectionTrait;
 use serde_json::json;
 
 const ALL: [&str; 3] = [
     "m20261110_000001_create_users",
     "m20261110_000002_create_posts",
-    "m20261115_000001_create_nestrs_outbox",
+    "m20261115_000001_create_purlin_outbox",
 ];
 
 /// A SQLite file that is removed when the test ends.

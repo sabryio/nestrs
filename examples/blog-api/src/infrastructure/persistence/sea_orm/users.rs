@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::entities::user;
 use super::{executor, unavailable};
 use crate::domain::{Email, Page, RepositoryError, User, UserName, UserRepository};
-use nestrs_sea_orm::Database;
+use purlin_sea_orm::Database;
 
 /// Adapter for [`UserRepository`] backed by SeaORM.
 pub struct SeaUserRepository {

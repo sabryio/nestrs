@@ -1,5 +1,5 @@
-use nestrs::http::BearerAuth;
-use nestrs::prelude::*;
+use purlin::http::BearerAuth;
+use purlin::prelude::*;
 
 use crate::infrastructure::auth::StaticTokenVerifier;
 

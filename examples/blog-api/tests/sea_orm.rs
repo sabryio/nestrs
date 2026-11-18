@@ -3,8 +3,8 @@
 
 use blog_api::AppModule;
 use blog_api::infrastructure::config::{AppConfig, Storage};
-use nestrs::http::axum::http::StatusCode;
-use nestrs_testing::{TestApp, TestClient};
+use purlin::http::axum::http::StatusCode;
+use purlin_testing::{TestApp, TestClient};
 use serde_json::{Value, json};
 
 fn database_config() -> AppConfig {

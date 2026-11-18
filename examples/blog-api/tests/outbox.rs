@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use blog_api::AppModule;
 use blog_api::infrastructure::announcements::Announced;
 use blog_api::infrastructure::config::{AppConfig, Storage};
-use nestrs::http::axum::http::StatusCode;
-use nestrs_outbox::OutboxRelay;
-use nestrs_testing::TestApp;
+use purlin::http::axum::http::StatusCode;
+use purlin_outbox::OutboxRelay;
+use purlin_testing::TestApp;
 use serde_json::{Value, json};
 
 async fn database_app() -> TestApp {

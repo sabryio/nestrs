@@ -1,6 +1,6 @@
 # 6. Persistence
 
-`nestrs-sea-orm` provides the connection, migrations, a readiness check and a shutdown hook as one module, so the blog's
+`purlin-sea-orm` provides the connection, migrations, a readiness check and a shutdown hook as one module, so the blog's
 persistence module declares only what is its own business:
 
 <!-- source: examples/blog-api/src/composition/persistence_module.rs -->
@@ -9,7 +9,7 @@ persistence module declares only what is its own business:
 ///
 /// Importers get the two ports and the [`Transactional`] interceptor; the concrete adapters
 /// stay private. The connection, its migrations, its readiness check and its shutdown come
-/// from `nestrs_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
+/// from `purlin_sea_orm::SeaOrmModule`, so nothing here knows how a pool is managed.
 #[module(
     imports = [SeaOrmModule::with_migrator::<Migrator>(database_config())],
     providers = [user_repository, post_repository, post_announcements, SeaOutboxStore],

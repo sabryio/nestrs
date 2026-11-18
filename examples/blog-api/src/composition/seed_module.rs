@@ -1,4 +1,4 @@
-use nestrs::prelude::*;
+use purlin::prelude::*;
 
 use super::seed::DemoDataSeeder;
 use super::{PostsModule, UsersModule};

@@ -78,7 +78,7 @@ start-up, so a bad value stops the process with a message instead of failing lat
 pub struct AppModule;
 ```
 
-`AppModule` is a list. Adding a feature means adding one line; `nestrs generate feature|module|port` edits this list for you
+`AppModule` is a list. Adding a feature means adding one line; `purlin generate feature|module|port` edits this list for you
 by parsing it, so comments and formatting survive.
 
 **SOLID here.** Switching `Storage::Memory` for `Storage::Database` edits one provider (*open/closed*, and *Liskov*: both

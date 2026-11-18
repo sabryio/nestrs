@@ -154,6 +154,7 @@ pub(crate) fn expand(mut item: ItemImpl) -> syn::Result<TokenStream> {
     }
 
     let self_ty = item.self_ty.clone();
+    let fx = crate::util::fx_path();
 
     let hook = |hook: &Hook, register: Ident| {
         let method = &hook.method;
@@ -187,7 +188,7 @@ pub(crate) fn expand(mut item: ItemImpl) -> syn::Result<TokenStream> {
                 None => quote!(),
             }
         };
-        quote_spanned!(span=> .provide(::fx::provide(<#self_ty>::#method) #(#hooks)* #bind #placement))
+        quote_spanned!(span=> .provide(#fx::provide(<#self_ty>::#method) #(#hooks)* #bind #placement))
     });
     let invokes = invokes
         .iter()
@@ -199,8 +200,8 @@ pub(crate) fn expand(mut item: ItemImpl) -> syn::Result<TokenStream> {
     Ok(quote! {
         #item
 
-        impl ::fx::Component for #self_ty {
-            fn register(options: ::fx::Options) -> ::fx::Options {
+        impl #fx::Component for #self_ty {
+            fn register(options: #fx::Options) -> #fx::Options {
                 options #(#providers)* #(#invokes)* #(#decorates)*
             }
         }

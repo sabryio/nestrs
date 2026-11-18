@@ -21,12 +21,27 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       # The blog obeys its own layer rules, and the React contract matches its controllers.
-      - run: cargo run -q -p nestrs-cli -- doctor
+      - run: cargo run -q -p purlin-cli -- doctor
         working-directory: examples/blog-api
-      - run: cargo run -q -p nestrs-cli -- generate contract --check --strict --also ../../crates/nestrs-health/src --out ../react-orpc/src/contract.generated.ts
+      - run: cargo run -q -p purlin-cli -- generate contract --check --strict --also ../../crates/purlin-health/src --out ../react-orpc/src/contract.generated.ts
         working-directory: examples/blog-api
       # Builds a generated project (modules, features, jobs) and lints it.
-      - run: cargo test -p nestrs-cli -- --ignored
+      - run: cargo test -p purlin-cli -- --ignored
+
+  # The fx layer and the adapters that claim to be headless must work, and stay, without the HTTP stack.
+  headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/check-headless.sh
+      - run: cargo check -p purlin --no-default-features
+      - run: cargo check -p purlin-health -p purlin-sea-orm --no-default-features --all-targets
+      - run: cargo test -p rust-fx -p rust-fx-macros --all-features
+      # rustc's exact wording is pinned to the stable toolchain used here.
+      - run: cargo test -p rust-fx --test ui -- --ignored
+      - run: cargo run -q -p rust-fx --example worker
 
   # The declared rust-version must be the real one: build with exactly that toolchain.
   msrv:
@@ -35,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.89.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --locked --exclude nestrs-bench
+      - run: cargo check --workspace --locked --exclude purlin-bench
 
   docs:
     runs-on: ubuntu-latest
@@ -45,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --workspace --no-deps --exclude nestrs-bench
+      - run: cargo doc --workspace --no-deps --exclude purlin-bench
 
   # Compares the public API with the last published release. Skipped until one exists.
   semver:
@@ -56,5 +71,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          exclude: nestrs-bench,nestrs-cli,blog-api,todo-minimal
+          exclude: purlin-bench,purlin-cli,blog-api,todo-minimal
         continue-on-error: true  # remove once the first release is on crates.io

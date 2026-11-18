@@ -1,10 +1,10 @@
 /**
  * Bridges the Rust server's error envelope and oRPC's typed errors.
  *
- * Every nestrs failure is `{"error":{"code","message","details"?}}`. Two steps turn
+ * Every purlin failure is `{"error":{"code","message","details"?}}`. Two steps turn
  * it into something the contract can type:
  *
- * 1. `decodeNestrsError` (the link's `errorResponseBodyDecoder`) builds an
+ * 1. `decodePurlinError` (the link's `errorResponseBodyDecoder`) builds an
  *    `ORPCError` whose `code` follows the HTTP status (404 → `NOT_FOUND`) and whose
  *    `data` is the envelope's body, the same shape the generated `ErrorBody` schema
  *    describes. Without it a 404 would surface as an opaque `MalformedResponseError`.
@@ -26,7 +26,7 @@ function codeFor(status: number): string {
   return codeForStatus.get(status) ?? (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST");
 }
 
-function isNestrsErrorBody(body: unknown): body is { error: ErrorBody } {
+function isPurlinErrorBody(body: unknown): body is { error: ErrorBody } {
   if (typeof body !== "object" || body === null || !("error" in body)) return false;
   const error = (body as { error: unknown }).error;
   return (
@@ -38,12 +38,12 @@ function isNestrsErrorBody(body: unknown): body is { error: ErrorBody } {
 }
 
 /** `errorResponseBodyDecoder` for `OpenAPILink`. */
-export function decodeNestrsError(
+export function decodePurlinError(
   body: unknown,
   response: { status: number },
   fallback: () => Error,
 ): Error {
-  if (!isNestrsErrorBody(body)) return fallback();
+  if (!isPurlinErrorBody(body)) return fallback();
   return new ORPCError(codeFor(response.status), { message: body.error.message, data: body.error });
 }
 

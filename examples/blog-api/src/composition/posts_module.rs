@@ -1,5 +1,5 @@
-use nestrs::prelude::*;
-use nestrs_kit::KitModule;
+use purlin::prelude::*;
+use purlin_kit::KitModule;
 
 use super::{AuthModule, PersistenceModule, SharedStateModule};
 use crate::application::{DeletePost, GetPost, ListPosts, PublishPost, WatchPosts};

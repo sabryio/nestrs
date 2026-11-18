@@ -105,7 +105,7 @@ pub enum ApplicationError {
 ## Add one with the CLI
 
 ```text
-nestrs generate use-case post archive
+purlin generate use-case post archive
 ```
 
 creates `ArchivePost` with a unit test and a fake repository, exports it from `application/`, and adds it to the feature

@@ -1,8 +1,8 @@
 //! The catalogue interceptors, attached to the real controllers.
 
 use blog_api::AppModule;
-use nestrs::http::axum::http::StatusCode;
-use nestrs_testing::{TestApp, TestClient};
+use purlin::http::axum::http::StatusCode;
+use purlin_testing::{TestApp, TestClient};
 use serde_json::{Value, json};
 
 const TOKEN: &str = "dev-token";
@@ -89,7 +89,7 @@ async fn main_can_resolve_the_shared_rate_limit_store_and_readiness_omits_unconf
     let app = TestApp::start(AppModule).await;
     // `main` builds the app-wide limit from this port; without Redis it is the in-memory store.
     app.container()
-        .resolve::<dyn nestrs::http::RateLimitStore>()
+        .resolve::<dyn purlin::http::RateLimitStore>()
         .expect("the rate limit store is visible from the root");
 
     let ready: Value = app
