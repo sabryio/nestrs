@@ -1,0 +1,38 @@
+[package]
+name = "rust-fx"
+description = "fx-style application framework for Rust: dependency injection, modules, lifecycle hooks and a graceful runtime, with no web stack attached"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rust-fx"
+authors.workspace = true
+keywords = ["dependency-injection", "fx", "lifecycle", "modules", "framework"]
+categories = ["development-tools", "asynchronous"]
+readme = "README.md"
+
+[lib]
+# The package is `rust-fx` (crates.io name), the library is `fx`: `fx::App`, `fx::provide`.
+name = "fx"
+
+[features]
+default = ["macros"]
+## `#[fx::component]`, `#[fx::module]`, `#[derive(fx::Params)]` and friends.
+macros = ["dep:rust-fx-macros"]
+## `fx::test`: a headless test harness with `replace` and an event recorder.
+test = []
+
+[dependencies]
+rust-fx-macros = { workspace = true, optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { version = "1", features = ["rt", "sync", "time", "signal", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync", "test-util"] }
+trybuild = "1"
+
+[lints]
+workspace = true

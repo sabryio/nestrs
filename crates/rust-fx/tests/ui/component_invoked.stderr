@@ -1,0 +1,5 @@
+error: list components under `providers`; they register their own invokes and decorators
+  --> tests/ui/component_invoked.rs:11:25
+   |
+11 | #[fx::module(invokes = [Worker])]
+   |                         ^^^^^^

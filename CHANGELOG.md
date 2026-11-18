@@ -14,6 +14,14 @@ All crates in the workspace share one version and are released together.
   tree never actually built with).
 
 ### Added
+- `rust-fx` (library `fx`): a headless, fx-style application framework with no HTTP dependency.
+  Function constructors (`provide`), `invoke`, `decorate`, `supply`, `bind!` (fx.As), named
+  values and groups, `Option<Arc<T>>`, modules with private scope and exports, lifecycle hooks
+  with rollback, `Shutdowner`, start/stop timeouts, `validate()`, observers, `App::get`, and
+  `fx::test` (feature `test`) with `replace`.
+- `rust-fx-macros`: `#[fx::component]`, `#[fx::module]`, `#[derive(fx::Params)]`,
+  `#[derive(fx::Component)]`.
+- `rust-fx/examples/worker.rs`: a worker with no web stack.
 - **`nestrs-sea-orm`**: managed SeaORM connection with lifecycle hooks, migrations behind a port,
   health indicator, `Executor`, per-request `Transactional` interceptor, `UnitOfWork` and
   `Database::in_transaction`. The blog example uses it instead of its own wrapper.

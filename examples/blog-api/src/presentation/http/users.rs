@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::dto::{CreateUserRequest, UserResponse};
 use super::idempotent::IdempotentWrites;
+use super::page::to_page;
 use crate::application::{GetUser, ListUsers, RegisterUser};
 use nestrs::http::BearerAuth;
 use nestrs_interceptors::{ETag, SecurityHeaders};
@@ -29,7 +30,7 @@ impl UsersController {
     /// Paginated with `limit` and `offset`.
     #[get]
     async fn list(&self, Piped(pagination): Piped<PaginationPipe>) -> Result<Json<Vec<UserResponse>>, HttpError> {
-        let users = self.list.execute(pagination.try_into()?).await?;
+        let users = self.list.execute(to_page(pagination)?).await?;
         Ok(Json(users.into_iter().map(UserResponse::from).collect()))
     }
 

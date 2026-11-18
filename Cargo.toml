@@ -18,6 +18,8 @@ members = [
     "crates/nestrs-redis",
     "crates/nestrs-sea-orm",
     "crates/nestrs-testing",
+    "crates/rust-fx",
+    "crates/rust-fx-macros",
     "crates/nestrs",
     "examples/blog-api",
     "examples/todo-minimal",
@@ -53,6 +55,8 @@ nestrs-otel = { path = "crates/nestrs-otel", version = "0.1.0" }
 nestrs-outbox = { path = "crates/nestrs-outbox", version = "0.1.0" }
 nestrs-sea-orm = { path = "crates/nestrs-sea-orm", version = "0.1.0" }
 nestrs = { path = "crates/nestrs", version = "0.1.0" }
+rust-fx = { path = "crates/rust-fx", version = "0.1.0" }
+rust-fx-macros = { path = "crates/rust-fx-macros", version = "0.1.0" }
 
 # External crates
 axum = "0.8"

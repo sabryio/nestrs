@@ -1,0 +1,5 @@
+error: unknown key `provides`; expected name, imports, providers, invokes, decorators or exports
+ --> tests/ui/unknown_module_key.rs:1:14
+  |
+1 | #[fx::module(provides = [])]
+  |              ^^^^^^^^

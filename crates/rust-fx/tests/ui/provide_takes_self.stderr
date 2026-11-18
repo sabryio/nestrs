@@ -1,0 +1,5 @@
+error: `#[fx::provide]` functions take their dependencies as parameters, not `self`
+ --> tests/ui/provide_takes_self.rs:6:5
+  |
+6 |     fn connect(&self) -> Self {
+  |     ^^

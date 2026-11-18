@@ -2509,6 +2509,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-fx"
+version = "0.1.0"
+dependencies = [
+ "rust-fx-macros",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "trybuild",
+]
+
+[[package]]
+name = "rust-fx-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

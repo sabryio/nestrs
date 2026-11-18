@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::dto::{CreatePostRequest, PostEventDto, PostResponse};
 use super::idempotent::IdempotentWrites;
+use super::page::to_page;
 use crate::application::{DeletePost, GetPost, ListPosts, PublishPost, WatchPosts};
 use crate::domain::{EventCursor, Sequenced};
 use nestrs::http::BearerAuth;
@@ -32,7 +33,7 @@ impl PostsController {
     /// Paginated with `limit` and `offset`.
     #[get]
     async fn list(&self, Piped(pagination): Piped<PaginationPipe>) -> Result<Json<Vec<PostResponse>>, HttpError> {
-        let posts = self.list.execute(pagination.try_into()?).await?;
+        let posts = self.list.execute(to_page(pagination)?).await?;
         Ok(Json(posts.into_iter().map(PostResponse::from).collect()))
     }
 

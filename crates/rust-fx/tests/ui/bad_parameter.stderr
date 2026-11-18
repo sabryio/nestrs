@@ -1,0 +1,22 @@
+error[E0277]: `fn(String) {uses}` cannot be registered as an invoke
+ --> tests/ui/bad_parameter.rs:7:35
+  |
+7 |     let _ = fx::App::new().invoke(uses);
+  |                            ------ ^^^^ not a valid invoke function
+  |                            |
+  |                            required by a bound introduced by this call
+  |
+  = help: the trait `Invocation<_>` is not implemented for fn item `fn(String) {uses}`
+  = note: an invoke is a function whose parameters are `Arc<T>`, `Option<Arc<T>>`, `fx::Named`, `fx::Group`, `fx::Lifecycle` or `fx::Shutdowner`
+  = note: and which returns `()` or a `Result<(), E>`
+help: the trait `IntoInvoke<fx::descriptor::Described>` is implemented for `fx::Invoke`
+ --> src/descriptor.rs
+  |
+  | impl IntoInvoke<Described> for Invoke {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: required for `fn(String) {uses}` to implement `IntoInvoke<fx::descriptor::FromFunction<_>>`
+note: required by a bound in `App::invoke`
+ --> src/app.rs
+  |
+  |     pub fn invoke<M>(mut self, invoke: impl IntoInvoke<M>) -> Self {
+  |                                             ^^^^^^^^^^^^^ required by this bound in `App::invoke`

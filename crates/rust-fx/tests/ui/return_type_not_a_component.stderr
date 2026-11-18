@@ -1,0 +1,25 @@
+error[E0277]: `fn() -> Config {config}` cannot be registered as a provider
+  --> tests/ui/return_type_not_a_component.rs:11:36
+   |
+11 |     let _ = fx::App::new().provide(config);
+   |                            ------- ^^^^^^ not a valid constructor
+   |                            |
+   |                            required by a bound introduced by this call
+   |
+   = help: the trait `Constructor<_>` is not implemented for fn item `fn() -> Config {config}`
+   = note: a constructor is a function whose parameters are `Arc<T>`, `Option<Arc<T>>`, `fx::Named`, `fx::Group`, `fx::Lifecycle` or `fx::Shutdowner`
+   = note: and whose return type is an `Arc<T>`, a type with `#[derive(fx::Component)]` / `#[fx::component]`, or a `Result` of either
+help: the following other types implement trait `IntoProvider<Marker>`
+  --> src/descriptor.rs
+   |
+   | impl<V: ?Sized + Send + Sync + 'static> IntoProvider<Described> for Provide<V> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Provide<V>`
+...
+   | impl IntoProvider<Described> for Provider {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Provider`
+   = note: required for `fn() -> Config {config}` to implement `IntoProvider<fx::descriptor::FromFunction<_>>`
+note: required by a bound in `App::provide`
+  --> src/app.rs
+   |
+   |     pub fn provide<M>(mut self, provider: impl IntoProvider<M>) -> Self {
+   |                                                ^^^^^^^^^^^^^^^ required by this bound in `App::provide`

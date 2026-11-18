@@ -1,0 +1,5 @@
+error: #[fx::component] does not support generic impls; implement `fx::Component` by hand
+ --> tests/ui/generic_component.rs:4:5
+  |
+4 | impl<T: Send + Sync + 'static> Cache<T> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
