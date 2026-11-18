@@ -51,6 +51,12 @@ impl Hosted {
         &self.modules
     }
 
+    /// Every built singleton.
+    #[must_use]
+    pub fn container(&self) -> Arc<Container> {
+        Arc::clone(&self.container)
+    }
+
     /// Recipes for request-scoped and transient providers.
     #[must_use]
     pub fn scoped(&self) -> Arc<ScopedProviders> {
@@ -119,3 +125,124 @@ pub fn hosted<M: Module>() -> Options {
 
 /// Forces construction at start, even when nothing else depends on [`Hosted`].
 fn force_start(_hosted: Arc<Hosted>) {}
+
+#[cfg(feature = "http")]
+pub use serve::{HttpServer, serve, serve_with};
+
+/// The HTTP transport as an fx component.
+#[cfg(feature = "http")]
+mod serve {
+    use std::net::SocketAddr;
+    use std::sync::{Arc, Mutex, PoisonError};
+
+    use fx::Options;
+    use purlin_http::{App, AppError};
+    use tokio::net::TcpListener;
+    use tokio::sync::oneshot;
+    use tokio::task::JoinHandle;
+
+    use super::Hosted;
+
+    type Configure = Arc<dyn Fn(App) -> App + Send + Sync>;
+
+    /// A bound HTTP listener, serving a hosted graph's controllers.
+    ///
+    /// Construction builds the router and binds the socket (so a bad address fails fx's start
+    /// phase); the start hook begins serving; the stop hook drains in-flight requests, ends open
+    /// event streams and waits for the server task.
+    pub struct HttpServer {
+        local_addr: SocketAddr,
+        pending: Mutex<Option<(App, TcpListener)>>,
+        stop: Mutex<Option<oneshot::Sender<()>>>,
+        task: Mutex<Option<JoinHandle<Result<(), AppError>>>>,
+    }
+
+    impl fx::Component for HttpServer {}
+
+    impl HttpServer {
+        /// The address actually bound (useful with port `0`).
+        #[must_use]
+        pub fn local_addr(&self) -> SocketAddr {
+            self.local_addr
+        }
+
+        fn spawn(&self) {
+            let Some((app, listener)) = lock(&self.pending).take() else {
+                return;
+            };
+            let (stop, stopped) = oneshot::channel();
+            *lock(&self.stop) = Some(stop);
+            tracing::info!(address = %self.local_addr, "purlin http server listening");
+            let task = tokio::spawn(app.serve_on(listener, async move {
+                let _ = stopped.await;
+            }));
+            *lock(&self.task) = Some(task);
+        }
+
+        async fn halt(&self) -> Result<(), AppError> {
+            if let Some(stop) = lock(&self.stop).take() {
+                let _ = stop.send(());
+            }
+            let task = lock(&self.task).take();
+            match task {
+                Some(task) => task.await.map_err(|error| AppError::Io(std::io::Error::other(error)))?,
+                None => Ok(()),
+            }
+        }
+    }
+
+    fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+        mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    async fn build(host: Arc<Hosted>, address: Arc<str>, configure: Configure) -> Result<HttpServer, AppError> {
+        let app = App::from_bootstrapped(
+            host.container(),
+            host.scoped(),
+            host.take_controllers(),
+            host.modules().to_vec(),
+        )?;
+        let app = configure(app);
+        let listener = TcpListener::bind(&*address).await?;
+        Ok(HttpServer {
+            local_addr: listener.local_addr()?,
+            pending: Mutex::new(Some((app, listener))),
+            stop: Mutex::new(None),
+            task: Mutex::new(None),
+        })
+    }
+
+    /// fx options that serve the hosted graph's HTTP controllers on `address`.
+    ///
+    /// Combine with [`hosted`](super::hosted):
+    ///
+    /// ```no_run
+    /// # use purlin::{fx, hosting};
+    /// # #[purlin::module] struct AppModule;
+    /// # async fn demo() -> fx::Result<()> {
+    /// fx::App::new()
+    ///     .options(hosting::hosted::<AppModule>())
+    ///     .options(hosting::serve("0.0.0.0:3000"))
+    ///     .run()
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    #[must_use]
+    pub fn serve(address: impl Into<String>) -> Options {
+        serve_with(address, |app| app)
+    }
+
+    /// Like [`serve`], with a hook to customise the [`App`] (layers, prefix, OpenAPI) first.
+    #[must_use]
+    pub fn serve_with(address: impl Into<String>, configure: impl Fn(App) -> App + Send + Sync + 'static) -> Options {
+        let address: Arc<str> = address.into().into();
+        let configure: Configure = Arc::new(configure);
+        Options::new()
+            .provide(
+                fx::provide(move |host: Arc<Hosted>| build(host, Arc::clone(&address), Arc::clone(&configure)))
+                    .on_start(|server: Arc<HttpServer>| async move { server.spawn() })
+                    .on_stop(|server: Arc<HttpServer>| async move { server.halt().await }),
+            )
+            .invoke(|_server: Arc<HttpServer>| {})
+    }
+}

@@ -95,6 +95,18 @@ use purlin::{fx, hosting};
 fx::App::new().options(hosting::hosted::<AppModule>()).run().await?;
 ```
 
+With the `http` feature, `hosting::serve("0.0.0.0:3000")` adds the HTTP transport as another fx
+component (bound at construction, serving on start, draining on stop), and
+`serve_with(addr, |app| app.global_prefix("/api"))` customises the `App` first:
+
+```rust
+fx::App::new()
+    .options(hosting::hosted::<AppModule>())
+    .options(hosting::serve("0.0.0.0:3000"))
+    .run()
+    .await?;   // Ctrl-C / SIGTERM stop both the server and the module graph, in order
+```
+
 The graph is bootstrapped during fx's start phase (a wiring mistake fails startup), its
 `#[on_destroy]` hooks run in reverse order during stop, and other fx components can take
 `Arc<hosting::Hosted>` to reach purlin singletons.

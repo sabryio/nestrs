@@ -24,6 +24,8 @@ http = ["dep:purlin-http"]
 async-trait = "0.1"
 purlin-core.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 purlin-config.workspace = true
 purlin-http = { workspace = true, optional = true }
 purlin-macros.workspace = true
@@ -44,3 +46,47 @@ validator.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "http_features"
+required-features = ["http"]
+
+[[test]]
+name = "macros"
+required-features = ["http"]
+
+[[test]]
+name = "merge"
+required-features = ["http"]
+
+[[test]]
+name = "modules"
+required-features = ["http"]
+
+[[test]]
+name = "mount"
+required-features = ["http"]
+
+[[test]]
+name = "openapi"
+required-features = ["http"]
+
+[[test]]
+name = "status"
+required-features = ["http"]
+
+[[test]]
+name = "syntax"
+required-features = ["http"]
+
+[[test]]
+name = "websocket"
+required-features = ["http"]
+
+[[test]]
+name = "ui"
+required-features = ["http"]
+
+[[test]]
+name = "hosting_http"
+required-features = ["http"]

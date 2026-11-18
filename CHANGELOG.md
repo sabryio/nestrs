@@ -22,7 +22,7 @@ All crates in the workspace share one version and are released together.
   `scripts/check-headless.sh` enforces it in CI.
 
 ### Added
-- `purlin::hosting`: `hosted::<AppModule>()` runs a purlin module graph inside an `fx::App` (bootstrap at start, destroy hooks at stop, `Arc<Hosted>` for other fx components); works without the `http` feature.
+- `purlin::hosting`: `hosted::<AppModule>()` runs a purlin module graph inside an `fx::App` (bootstrap at start, destroy hooks at stop, `Arc<Hosted>` for other fx components); works without the `http` feature. With `http`, `hosting::serve`/`serve_with` run the HTTP server as an fx component; `App::from_bootstrapped` and `App::serve_on` back it.
 - `rust-fx` (library `fx`): a headless, fx-style application framework with no HTTP dependency.
   Function constructors (`provide`), `invoke`, `decorate`, `supply`, `bind!` (fx.As), named
   values and groups, `Option<Arc<T>>`, modules with private scope and exports, lifecycle hooks

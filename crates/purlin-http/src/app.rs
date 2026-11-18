@@ -11,7 +11,9 @@ use axum::routing::Route;
 use axum::routing::get;
 use std::marker::PhantomData;
 
-use purlin_core::{Container, DiError, Module, Overrides, Provider, Shutdown, bootstrap_with};
+use purlin_core::{
+    Container, DiError, Module, MountedController, Overrides, Provider, ScopedProviders, Shutdown, bootstrap_with,
+};
 
 use crate::filter::{ErasedFilter, with_filters};
 use crate::openapi::{self, ApiInfo, RouteDoc};
@@ -37,7 +39,7 @@ pub struct App {
     router: Router,
     container: Arc<Container>,
     modules: Vec<&'static str>,
-    shutdown: Shutdown,
+    shutdown: Option<Shutdown>,
     docs: Vec<RouteDoc>,
     prefix: String,
     /// Flips to `true` when the app stops; open SSE streams end with `close`.
@@ -162,43 +164,69 @@ impl<M: Module> AppBuilder<M> {
     /// router. Unknown routes get the same JSON error envelope as every other failure.
     pub async fn build(self) -> Result<App, AppError> {
         let booted = bootstrap_with::<M>(self.overrides).await?;
-
-        let mut router = Router::new();
-        let mut docs = self.mounted_docs;
-        for controller in booted.controllers {
-            // Controllers for other transports are somebody else's business.
-            if let Ok(mut routes) = controller.for_transport::<HttpTransport>() {
-                router = router.merge(routes.router);
-                docs.append(&mut routes.docs);
-            }
-        }
-        for build in self.merged {
-            router = router.merge(build(&booted.container)?);
-        }
-        let router = router.fallback(|| async { HttpError::not_found("route not found").into_response() });
-        let router = with_request_scopes(router, Arc::clone(&booted.container), Arc::clone(&booted.scoped));
-
-        let mut filters = Vec::with_capacity(self.filters.len());
-        for resolve in self.filters {
-            filters.push(resolve(&booted.container)?);
-        }
-        let router = with_filters(router, filters);
-        let (stopping, stopped) = tokio::sync::watch::channel(false);
-        let router = router.layer(axum::middleware::from_fn_with_state(
-            stopped,
-            crate::sse::end_on_shutdown,
-        ));
-
-        Ok(App {
-            router,
+        let parts = Parts {
             container: booted.container,
+            scoped: booted.scoped,
+            controllers: booted.controllers,
             modules: booted.modules,
-            shutdown: booted.shutdown,
-            docs,
-            prefix: String::new(),
-            stopping,
-        })
+            shutdown: Some(booted.shutdown),
+        };
+        assemble(parts, self.mounted_docs, self.merged, self.filters)
     }
+}
+
+/// Everything a bootstrapped module graph hands to the HTTP adapter.
+struct Parts {
+    container: Arc<Container>,
+    scoped: Arc<ScopedProviders>,
+    controllers: Vec<MountedController>,
+    modules: Vec<&'static str>,
+    /// `None` when something else (an fx app) owns the destroy hooks.
+    shutdown: Option<Shutdown>,
+}
+
+/// Mounts controllers, request scopes, filters and the shutdown-aware SSE layer.
+fn assemble(
+    parts: Parts,
+    mounted_docs: Vec<RouteDoc>,
+    merged: Vec<RouterFactory>,
+    filters: Vec<FilterResolver>,
+) -> Result<App, AppError> {
+    let mut router = Router::new();
+    let mut docs = mounted_docs;
+    for controller in parts.controllers {
+        // Controllers for other transports are somebody else's business.
+        if let Ok(mut routes) = controller.for_transport::<HttpTransport>() {
+            router = router.merge(routes.router);
+            docs.append(&mut routes.docs);
+        }
+    }
+    for build in merged {
+        router = router.merge(build(&parts.container)?);
+    }
+    let router = router.fallback(|| async { HttpError::not_found("route not found").into_response() });
+    let router = with_request_scopes(router, Arc::clone(&parts.container), Arc::clone(&parts.scoped));
+
+    let mut resolved = Vec::with_capacity(filters.len());
+    for resolve in filters {
+        resolved.push(resolve(&parts.container)?);
+    }
+    let router = with_filters(router, resolved);
+    let (stopping, stopped) = tokio::sync::watch::channel(false);
+    let router = router.layer(axum::middleware::from_fn_with_state(
+        stopped,
+        crate::sse::end_on_shutdown,
+    ));
+
+    Ok(App {
+        router,
+        container: parts.container,
+        modules: parts.modules,
+        shutdown: parts.shutdown,
+        docs,
+        prefix: String::new(),
+        stopping,
+    })
 }
 
 impl App {
@@ -206,6 +234,48 @@ impl App {
     /// controller into one router. Shorthand for `App::builder(root).build()`.
     pub async fn create<M: Module>(root: M) -> Result<Self, AppError> {
         Self::builder(root).build().await
+    }
+
+    /// Mounts the controllers of an already bootstrapped graph, for hosts that own the graph's
+    /// lifecycle (an fx app): [`shutdown`](Self::shutdown) then only signals open streams and
+    /// leaves the destroy hooks to the host.
+    pub fn from_bootstrapped(
+        container: Arc<Container>,
+        scoped: Arc<ScopedProviders>,
+        controllers: Vec<MountedController>,
+        modules: Vec<&'static str>,
+    ) -> Result<Self, AppError> {
+        let parts = Parts {
+            container,
+            scoped,
+            controllers,
+            modules,
+            shutdown: None,
+        };
+        assemble(parts, Vec::new(), Vec::new(), Vec::new())
+    }
+
+    /// Serves on an already bound `listener` until `stop` resolves, finishing in-flight requests.
+    ///
+    /// Unlike [`listen`](Self::listen) it installs no signal handlers and does not run destroy
+    /// hooks: whoever owns the lifecycle decides when to stop and what to tear down.
+    pub async fn serve_on(
+        self,
+        listener: TcpListener,
+        stop: impl Future<Output = ()> + Send + 'static,
+    ) -> Result<(), AppError> {
+        let stopping = self.stopping.clone();
+        axum::serve(
+            listener,
+            self.router
+                .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(async move {
+            stop.await;
+            stopping.send_replace(true);
+        })
+        .await?;
+        Ok(())
     }
 
     /// Starts configuring an app, e.g. to override providers in tests.
@@ -320,7 +390,10 @@ impl App {
     /// [`listen`](Self::listen) calls this itself; running it again is a no-op.
     pub async fn shutdown(&self) -> Vec<DiError> {
         self.stopping.send_replace(true);
-        self.shutdown.run(&self.container).await
+        match &self.shutdown {
+            Some(shutdown) => shutdown.run(&self.container).await,
+            None => Vec::new(),
+        }
     }
 
     /// Consumes the app, yielding the router (handy with `tower::ServiceExt::oneshot`).
