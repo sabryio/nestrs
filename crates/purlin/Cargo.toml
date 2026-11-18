@@ -23,6 +23,7 @@ http = ["dep:purlin-http"]
 [dependencies]
 async-trait = "0.1"
 purlin-core.workspace = true
+thiserror.workspace = true
 purlin-config.workspace = true
 purlin-http = { workspace = true, optional = true }
 purlin-macros.workspace = true

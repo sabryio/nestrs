@@ -86,7 +86,18 @@ already; `purlin-health` and `purlin-sea-orm` are headless with `default-feature
 
 Status: `fx` is a complete, standalone runtime (see `crates/rust-fx/README.md`). purlin's own
 module system (`#[injectable]`, `#[module]`, request scopes) still runs on `purlin-core`;
-moving it onto `fx` is the next step, and the two interoperate at the application edge.
+moving it onto `fx` is the next step. Until then the two interoperate through
+`purlin::hosting`, which runs a purlin module graph as one fx component:
+
+```rust
+use purlin::{fx, hosting};
+
+fx::App::new().options(hosting::hosted::<AppModule>()).run().await?;
+```
+
+The graph is bootstrapped during fx's start phase (a wiring mistake fails startup), its
+`#[on_destroy]` hooks run in reverse order during stop, and other fx components can take
+`Arc<hosting::Hosted>` to reach purlin singletons.
 
 ## Smallest example
 
