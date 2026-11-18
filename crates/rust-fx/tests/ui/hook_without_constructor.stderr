@@ -1,5 +1,5 @@
-error: `#[fx::on_start]` / `#[fx::on_stop]` need a `#[fx::provide]` constructor in the same impl block
- --> tests/ui/hook_without_provide.rs:3:1
+error: `#[fx::on_start]` / `#[fx::on_stop]` need a `#[fx::constructor]` in the same impl block
+ --> tests/ui/hook_without_constructor.rs:3:1
   |
 3 | #[fx::component]
   | ^^^^^^^^^^^^^^^^

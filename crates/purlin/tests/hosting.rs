@@ -77,7 +77,7 @@ async fn other_fx_components_can_depend_on_the_hosted_graph() {
 
     let mut app = fx::App::new().options(
         hosted::<PlainApp>()
-            .provide(|host: Arc<Hosted>| Probe(host))
+            .constructor(|host: Arc<Hosted>| Probe(host))
             .invoke(|probe: Arc<Probe>| assert_eq!(probe.0.modules().len(), 2)),
     );
     app.start().await.expect("starts");

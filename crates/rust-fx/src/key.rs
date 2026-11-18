@@ -42,6 +42,11 @@ impl Key {
         }
     }
 
+    /// The type of an unnamed, non-group key: what interface bindings attach to.
+    pub(crate) fn plain_type_id(&self) -> Option<TypeId> {
+        (self.name.is_none() && !self.group).then_some(self.id)
+    }
+
     /// Fully qualified type name, as reported by [`std::any::type_name`].
     pub fn type_name(&self) -> &'static str {
         (self.ty)()

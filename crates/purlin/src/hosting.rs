@@ -119,7 +119,7 @@ async fn teardown(hosted: Arc<Hosted>) -> Result<(), ShutdownFailed> {
 #[must_use]
 pub fn hosted<M: Module>() -> Options {
     Options::new()
-        .provide(fx::provide(boot::<M>).on_stop(teardown))
+        .constructor(fx::constructor(boot::<M>).on_stop(teardown))
         .invoke(force_start)
 }
 
@@ -238,8 +238,8 @@ mod serve {
         let address: Arc<str> = address.into().into();
         let configure: Configure = Arc::new(configure);
         Options::new()
-            .provide(
-                fx::provide(move |host: Arc<Hosted>| build(host, Arc::clone(&address), Arc::clone(&configure)))
+            .constructor(
+                fx::constructor(move |host: Arc<Hosted>| build(host, Arc::clone(&address), Arc::clone(&configure)))
                     .on_start(|server: Arc<HttpServer>| async move { server.spawn() })
                     .on_stop(|server: Arc<HttpServer>| async move { server.halt().await }),
             )

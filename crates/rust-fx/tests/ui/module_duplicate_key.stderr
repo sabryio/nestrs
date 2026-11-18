@@ -1,0 +1,5 @@
+error: `providers` is given twice; merge the lists
+ --> tests/ui/module_duplicate_key.rs:3:35
+  |
+3 | #[fx::module(providers = [Clock], providers = [Clock])]
+  |                                   ^^^^^^^^^

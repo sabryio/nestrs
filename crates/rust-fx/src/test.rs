@@ -12,6 +12,7 @@
 //!
 //! trait Mailer: Send + Sync { fn send(&self, to: &str) -> String; }
 //! struct Smtp;
+//! #[fx::bind]
 //! impl Mailer for Smtp { fn send(&self, to: &str) -> String { format!("smtp:{to}") } }
 //! struct Fake;
 //! impl Mailer for Fake { fn send(&self, to: &str) -> String { format!("fake:{to}") } }
@@ -19,7 +20,7 @@
 //! # #[tokio::main(flavor = "current_thread")]
 //! # async fn main() -> fx::Result<()> {
 //! let mut app = fx::test::App::new()
-//!     .provide(fx::bind!(dyn Mailer, || Arc::new(Smtp)))
+//!     .constructor(|| Arc::new(Smtp)) // `#[fx::bind]` provides `dyn Mailer` too
 //!     .replace::<dyn Mailer>(Arc::new(Fake));
 //! app.start().await?;
 //! assert_eq!(app.get::<dyn Mailer>().await?.send("a"), "fake:a");
@@ -120,8 +121,8 @@ impl App {
     /// Registers a constructor.
     #[must_use]
     #[track_caller]
-    pub fn provide<M>(mut self, provider: impl IntoProvider<M>) -> Self {
-        self.inner = self.inner.provide(provider);
+    pub fn constructor<M>(mut self, provider: impl IntoProvider<M>) -> Self {
+        self.inner = self.inner.constructor(provider);
         self
     }
 

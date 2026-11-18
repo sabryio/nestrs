@@ -13,7 +13,7 @@ pub struct Clock;
 
 #[fx::component]
 impl Clock {
-    #[fx::provide]
+    #[fx::constructor]
     pub fn new() -> Self { Self }
 }
 
@@ -33,22 +33,48 @@ async fn main() -> fx::Result<()> {
 }
 ```
 
+### Binding ports to adapters
+
+```rust
+trait Clock: Send + Sync { fn tick(&self) -> u32; }
+
+#[fx::bind]                       // declares `CounterClock: fx::Bound<dyn Clock>`
+impl Clock for CounterClock {
+    fn tick(&self) -> u32 { self.0.fetch_add(1, Ordering::SeqCst) }
+}
+
+#[fx::component]
+impl CounterClock {
+    #[fx::constructor]
+    pub fn new() -> Self { Self::default() }
+}
+
+#[fx::module(providers = [CounterClock], exports = [dyn Clock])]   // publishes the port only
+pub struct TimeModule;
+```
+
+Wherever a constructor of the plain `CounterClock` is registered, the `dyn Clock` provider
+is registered next to it, in the same scope; nothing spells the cast. `#[fx::bind(group)]`,
+`#[fx::bind(group = "jobs")]` and `#[fx::bind(name = "x")]` choose where the interface value
+goes. Forgetting the attribute is a compile error (`CounterClock is not declared as an
+implementation of dyn Clock`), because explicit binding requires `Bound`.
+
 See `examples/worker.rs` for a complete headless worker (`cargo run -p rust-fx --example worker`).
 
 ## fx, translated
 
 | fx (Go) | rust-fx |
 |---|---|
-| `fx.Provide(f)` | `.provide(f)`: any `fn` (sync or `async`, up to 12 parameters) |
+| `fx.Provide(f)` | `.constructor(f)`: any `fn` (sync or `async`, up to 12 parameters) |
 | `fx.Invoke(f)` | `.invoke(f)`, or `#[fx::invoke]` in a component |
 | `fx.Decorate(f)` | `.decorate(f)`, or `#[fx::decorate]` in a component |
 | `fx.Supply(v)` | `.supply(v)` / `.supply_arc::<dyn T>(arc)` |
-| `fx.As(new(I))` | `fx::bind!(dyn I, f)` or `#[fx::provide(as = dyn I)]` |
+| `fx.As(new(I))` | `#[fx::bind]` on `impl I for T` (automatic), `fx::bind::<dyn I, T>()` or `fx::constructor(f).bind::<dyn I>()` (explicit) |
 | `fx.Module` / `fx.Private` | `#[fx::module(imports, providers, exports, ...)]`; private by default, `exports` to share |
-| `fx.Options(...)` | `fx::Options::new().provide(..).invoke(..)`, `.merge(..)` |
+| `fx.Options(...)` | `fx::Options::new().constructor(..).invoke(..)`, `.merge(..)` |
 | `fx.In` / `fx.Out` | `#[derive(fx::Params)]` for inputs; return a `Result`/`Arc` for outputs |
-| `name:"x"` | `Named<Tag, T>` with `fx::tag!(Tag = "x")`; `#[fx::provide(name = "x")]` |
-| `group:"x"` | `Group<T>` / `Group<T, Tag>`; `#[fx::provide(group)]` |
+| `name:"x"` | `Named<Tag, T>` with `fx::tag!(Tag = "x")`; `#[fx::constructor(name = "x")]` |
+| `group:"x"` | `Group<T>` / `Group<T, Tag>`; `#[fx::constructor(group)]` |
 | `optional:"true"` | `Option<Arc<T>>` |
 | `fx.Lifecycle`, `fx.Hook` | `Lifecycle` (`on_start`, `on_stop`, `append(Hook)`), `#[fx::on_start]` / `#[fx::on_stop]` |
 | `fx.Shutdowner` | `Shutdowner` (`shutdown`, `shutdown_with(code)`) |
@@ -96,7 +122,7 @@ See `examples/worker.rs` for a complete headless worker (`cargo run -p rust-fx -
   `Lifecycle`, `Shutdowner`...) rather than a god-container; `Constructor`, `Invocation`,
   `Extract`, `Outcome`, `Observer` and `Module` are each one narrow contract.
 - **Dependency inversion.** Application code depends on ports (`dyn Trait`) and is bound
-  to adapters in modules (`bind!`/`as =`); the framework depends on the `Extract` and
+  to adapters (`#[fx::bind]` on the trait impl); the framework depends on the `Extract` and
   `Constructor` abstractions, never on concrete user types.
 
 ## Layout
@@ -104,13 +130,14 @@ See `examples/worker.rs` for a complete headless worker (`cargo run -p rust-fx -
 ```text
 rust-fx/
   src/
-    lib.rs          public surface, `bind!` and `tag!`, prelude
+    lib.rs          public surface, `tag!`, prelude
     key.rs          Key (type + name + group) and Origin (fn + file:line)
     error.rs        Error, Phase, BoxError
     value.rs        type-erased storage (Arc<dyn Any> holding Arc<T>)
     extract.rs      Extract + Arc/Option/Named/Group/Lifecycle/Shutdowner
     func.rs         Constructor/Invocation blanket impls for fn(..)->R, Component, Outcome
     descriptor.rs   Provide/Decorate/Invoke builders and their erased forms
+    bind.rs         Bound (the `#[fx::bind]` declaration), `fx::bind`, link-time registry
     options.rs      Options: ordered list of everything an app is made of
     module.rs       Module, ModuleDef, ModuleRef, Export
     graph.rs        planner: scopes, lookup, decorator chains, cycle/visibility checks
@@ -121,7 +148,17 @@ rust-fx/
     test.rs         fx::test (feature `test`)
   tests/            core (runtime), macros, harness, ui (compile-fail, run on demand)
   examples/         worker.rs, a headless worker
-rust-fx-macros/     #[fx::component], #[fx::module], derive(Params), derive(Component)
+rust-fx-macros/     the macros, as a compiler pipeline (below)
+  src/
+    lib.rs          the public macros, nothing else
+    pipeline.rs     trait Macro (parse -> analyze -> generate) and the driver
+    macros.rs       which stage implementations each macro uses
+    ast/            stage 1: tokens -> syntax tree (what was written)
+    sema/           stage 2: the rules; reports every violation via Diagnostics
+    ir.rs           the shared vocabulary: Constructor, Hook, Binding, Module, ...
+    codegen/        stage 4: IR -> Rust (cannot fail)
+    diagnostics.rs  error accumulation; support/  fx path resolution, syntax helpers
+    tests.rs        stage unit tests on token strings
 ```
 
 One concept per file keeps each reviewable on its own; the dependency arrow runs

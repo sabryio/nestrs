@@ -29,7 +29,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 ///
 /// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() -> fx::Result<()> {
-/// fx::App::new().provide(greeter).invoke(hello).run_until_started().await?;
+/// fx::App::new().constructor(greeter).invoke(hello).run_until_started().await?;
 /// # Ok(()) }
 /// ```
 pub struct App {
@@ -67,11 +67,11 @@ impl App {
         self
     }
 
-    /// Registers a constructor. See [`Options::provide`].
+    /// Registers a constructor. See [`Options::constructor`].
     #[must_use]
     #[track_caller]
-    pub fn provide<M>(mut self, provider: impl IntoProvider<M>) -> Self {
-        self.options = self.options.provide(provider);
+    pub fn constructor<M>(mut self, provider: impl IntoProvider<M>) -> Self {
+        self.options = self.options.constructor(provider);
         self
     }
 

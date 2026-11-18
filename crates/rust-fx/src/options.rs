@@ -47,10 +47,19 @@ impl Options {
     }
 
     /// Registers a constructor (`fx.Provide`).
+    ///
+    /// When it provides the plain value of a type that has `#[fx::bind]` declarations,
+    /// the interface providers are registered right after it, in the same scope.
     #[must_use]
     #[track_caller]
-    pub fn provide<M>(self, provider: impl IntoProvider<M>) -> Self {
-        self.push(Item::Provide(provider.into_provider()))
+    pub fn constructor<M>(self, provider: impl IntoProvider<M>) -> Self {
+        let provider = provider.into_provider();
+        let plain = provider.key.plain_type_id();
+        let options = self.push(Item::Provide(provider));
+        match plain {
+            Some(id) => crate::bind::apply_declared(options, id),
+            None => options,
+        }
     }
 
     /// Registers a function to run at startup (`fx.Invoke`).
@@ -93,6 +102,14 @@ impl Options {
     #[must_use]
     pub fn component<C: Component>(self) -> Self {
         C::register(self)
+    }
+
+    /// Additionally provides `C` as the interface `I` (see [`bind`](crate::bind())), for
+    /// code that does not use `#[fx::bind]`'s automatic registration. Needs `C: Bound<I>`.
+    #[must_use]
+    #[track_caller]
+    pub fn bind<I: ?Sized + Send + Sync + 'static, C: crate::Bound<I>>(self) -> Self {
+        self.constructor(crate::bind::<I, C>())
     }
 
     /// Appends another list.

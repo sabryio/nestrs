@@ -2,7 +2,7 @@ struct Db;
 
 #[fx::component]
 impl Db {
-    #[fx::provide]
+    #[fx::constructor]
     fn connect(&self) -> Self {
         Db
     }

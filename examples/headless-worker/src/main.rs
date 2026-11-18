@@ -32,12 +32,13 @@ struct CounterClock(AtomicU32);
 
 #[fx::component]
 impl CounterClock {
-    #[fx::provide(as = dyn Clock)]
+    #[fx::constructor]
     fn new() -> Self {
         Self::default()
     }
 }
 
+#[fx::bind]
 impl Clock for CounterClock {
     fn tick(&self) -> u32 {
         self.0.fetch_add(1, Ordering::SeqCst)
@@ -48,12 +49,13 @@ struct Cleanup;
 
 #[fx::component]
 impl Cleanup {
-    #[fx::provide(as = dyn Job, group)]
+    #[fx::constructor]
     fn new() -> Self {
         Self
     }
 }
 
+#[fx::bind(group)]
 impl Job for Cleanup {
     fn name(&self) -> &'static str {
         "cleanup"

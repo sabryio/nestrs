@@ -12,7 +12,7 @@ pub struct Clock;
 
 #[fx::component]
 impl Clock {
-    #[fx::provide]
+    #[fx::constructor]
     pub fn new() -> Self {
         Self
     }
@@ -57,7 +57,7 @@ fn marker() -> Marker {
 
 #[fx::component]
 impl Config {
-    #[fx::provide]
+    #[fx::constructor]
     fn load() -> Self {
         Self { url: "postgres://x" }
     }
@@ -74,7 +74,7 @@ struct SqlRepo {
 
 #[fx::component]
 impl SqlRepo {
-    #[fx::provide(as = dyn Repo)]
+    #[fx::constructor]
     async fn connect(config: Arc<Config>, log: Arc<Mutex<Vec<String>>>) -> Result<Self, std::io::Error> {
         Ok(Self { config, log })
     }
@@ -91,6 +91,7 @@ impl SqlRepo {
     }
 }
 
+#[fx::bind]
 impl Repo for SqlRepo {
     fn url(&self) -> String {
         self.config.url.to_string()
@@ -130,13 +131,13 @@ fn the_concrete_type_stays_private_when_bound_to_an_interface() {
         .invoke(|_: Arc<SqlRepo>| {})
         .validate()
         .unwrap_err();
-    assert!(matches!(error, Error::Missing { .. }), "{error}");
+    assert!(matches!(error, Error::NotVisible { .. }), "{error}");
 }
 
 #[test]
 fn derive_component_allows_returning_a_type_by_value() {
     App::new()
-        .provide(marker)
+        .constructor(marker)
         .invoke(|_: Arc<Marker>| {})
         .validate()
         .unwrap();
@@ -153,11 +154,13 @@ struct Jobs;
 struct Alpha;
 #[derive(fx::Component)]
 struct Beta;
+#[fx::bind(group)]
 impl Job for Alpha {
     fn id(&self) -> &'static str {
         "alpha"
     }
 }
+#[fx::bind(group)]
 impl Job for Beta {
     fn id(&self) -> &'static str {
         "beta"
@@ -168,22 +171,22 @@ fx::tag!(Primary = "primary");
 
 #[fx::component]
 impl Jobs {
-    #[fx::provide(as = dyn Job, group)]
+    #[fx::constructor]
     fn alpha() -> Alpha {
         Alpha
     }
 
-    #[fx::provide(as = dyn Job, group)]
+    #[fx::constructor]
     fn beta() -> Beta {
         Beta
     }
 
-    #[fx::provide(name = "primary")]
+    #[fx::constructor(name = "primary")]
     fn primary() -> Arc<String> {
         Arc::new("p".to_string())
     }
 
-    #[fx::provide]
+    #[fx::constructor]
     fn plain() -> Arc<u32> {
         Arc::new(1)
     }
@@ -228,8 +231,8 @@ async fn params_bundle_several_extractors() {
     let seen = Arc::new(Mutex::new((String::new(), 0usize, true, false)));
     let s = seen.clone();
     App::new()
-        .provide(Config::load)
-        .provide(fx::bind!(dyn Job, || Arc::new(Alpha)).in_group())
+        .constructor(Config::load)
+        .constructor(|| Arc::new(Alpha))
         .invoke(move |deps: Deps, pair: Pair| {
             *s.lock().unwrap() = (
                 deps.config.url.to_string(),
@@ -251,7 +254,7 @@ struct Greeter(String);
 
 #[fx::component]
 impl Greeter {
-    #[fx::provide]
+    #[fx::constructor]
     fn new(clock: Arc<Clock>) -> Self {
         let _ = clock;
         Self("hi".into())
@@ -293,7 +296,7 @@ async fn module_options_and_named_exports() {
     struct Db;
     #[fx::component]
     impl Db {
-        #[fx::provide(name = "primary")]
+        #[fx::constructor(name = "primary")]
         fn primary() -> Self {
             Db
         }

@@ -17,8 +17,8 @@
 //! # #[tokio::main(flavor = "current_thread")]
 //! # async fn main() -> fx::Result<()> {
 //! fx::App::new()
-//!     .provide(config)      // fx.Provide: a function is a constructor
-//!     .provide(greeter)     // its arguments are its dependencies
+//!     .constructor(config)      // fx.Provide: a function is a constructor
+//!     .constructor(greeter)     // its arguments are its dependencies
 //!     .invoke(main_job)     // fx.Invoke: runs once, dependencies first
 //!     .run_until_started()
 //!     .await
@@ -51,6 +51,7 @@
 extern crate self as fx;
 
 mod app;
+mod bind;
 mod descriptor;
 mod error;
 pub mod extract;
@@ -68,9 +69,10 @@ mod value;
 pub mod test;
 
 pub use app::App;
+pub use bind::{Bound, bind};
 pub use descriptor::{
-    Decorate, Decorator, IntoDecorator, IntoInvoke, IntoProvider, Invoke, Provide, Provider, bind, decorate, invoke,
-    provide,
+    Decorate, Decorator, IntoDecorator, IntoInvoke, IntoProvider, Invoke, Provide, Provider, constructor, decorate,
+    invoke,
 };
 pub use error::{BoxError, Error, Phase, Result};
 pub use extract::{
@@ -86,30 +88,13 @@ pub use shutdown::{Shutdowner, Signal};
 pub use value::BoxFuture;
 
 #[cfg(feature = "macros")]
-pub use rust_fx_macros::{Component, Params, component, module};
+pub use rust_fx_macros::{Component, Params, bind, component, module};
 
-/// Provides the result of a constructor as an interface: `fx.As`.
-///
-/// ```
-/// use std::sync::Arc;
-/// trait Clock: Send + Sync { fn now(&self) -> u64; }
-/// struct System;
-/// impl Clock for System { fn now(&self) -> u64 { 7 } }
-/// fn system() -> Arc<System> { Arc::new(System) }
-///
-/// fn use_it(clock: Arc<dyn Clock>) { assert_eq!(clock.now(), 7); }
-///
-/// let app = fx::App::new().provide(fx::bind!(dyn Clock, system)).invoke(use_it);
-/// app.validate().unwrap();
-/// ```
-///
-/// The interface must be `Send + Sync` (declare them as supertraits), because the
-/// graph shares values across tasks.
-#[macro_export]
-macro_rules! bind {
-    ($interface:ty, $constructor:expr) => {
-        $crate::bind($constructor, |value| value as ::std::sync::Arc<$interface>)
-    };
+/// Support for macro-generated code. Not part of the public API.
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::bind::{Binding, Placement};
+    pub use inventory;
 }
 
 /// Declares a unit struct that names values: `fx::tag!(Primary = "primary");`.
@@ -131,8 +116,8 @@ macro_rules! tag {
 /// The names most programs need.
 pub mod prelude {
     pub use crate::{
-        App, Component, Error, Group, Lifecycle, Module, Named, Optional, Options, Result, Shutdowner, bind, decorate,
-        invoke, provide,
+        App, Bound, Component, Error, Group, Lifecycle, Module, Named, Optional, Options, Result, Shutdowner, bind,
+        constructor, decorate, invoke,
     };
     #[cfg(feature = "macros")]
     pub use rust_fx_macros::{Params, component, module};

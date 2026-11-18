@@ -1,0 +1,5 @@
+error: `as = ..` is gone: put `#[fx::bind]` on the trait impl (`impl Trait for Type`) instead
+ --> tests/ui/constructor_as_is_gone.rs:7:23
+  |
+7 |     #[fx::constructor(as = dyn Clock)]
+  |                       ^^

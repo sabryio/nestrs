@@ -1,0 +1,5 @@
+error: #[fx::bind] does not support generic impls; bind each concrete type separately
+ --> tests/ui/bind_generic_impl.rs:5:5
+  |
+5 | impl<T: Send + Sync + 'static> Clock for Wrapper<T> {}
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^

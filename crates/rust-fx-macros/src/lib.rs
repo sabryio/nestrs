@@ -1,14 +1,28 @@
 //! Procedural macros for [`rust-fx`](https://docs.rs/rust-fx).
 //!
-//! Use them through the `fx` crate (`fx::component`, `fx::module`, `fx::Params`,
-//! `fx::Component`); this crate is an implementation detail.
+//! Use them through the `fx` crate (`fx::component`, `fx::bind`, `fx::module`,
+//! `fx::Params`, `fx::Component`); this crate is an implementation detail.
+//!
+//! # Architecture
+//!
+//! The macros share one compiler pipeline (see `pipeline.rs`): **parse** (`ast/`) →
+//! **analyze** (`sema/`, reports every rule violation) → **IR** (`ir.rs`) → **generate**
+//! (`codegen/`). `lib.rs` only declares the public macros; `macros.rs` says which stage
+//! implementations each one uses.
 
 use proc_macro::TokenStream;
 
-mod component;
-mod derive;
-mod module;
-mod util;
+mod ast;
+mod codegen;
+mod diagnostics;
+mod ir;
+mod macros;
+mod pipeline;
+mod sema;
+mod support;
+
+#[cfg(test)]
+mod tests;
 
 /// Turns an `impl` block into an `fx` component.
 ///
@@ -16,10 +30,9 @@ mod util;
 ///
 /// | Attribute | On | Effect |
 /// |---|---|---|
-/// | `#[fx::provide]` | associated fn | a constructor; its parameters are its dependencies |
-/// | `#[fx::provide(as = dyn Port)]` | associated fn | provide it as the interface (`fx.As`) |
-/// | `#[fx::provide(name = "x")]` | associated fn | register it under a name |
-/// | `#[fx::provide(group)]` / `group = "x"` | associated fn | contribute it to a group |
+/// | `#[fx::constructor]` | associated fn | a constructor; its parameters are its dependencies |
+/// | /// | `#[fx::constructor(name = "x")]` | associated fn | register it under a name |
+/// | `#[fx::constructor(group)]` / `group = "x"` | associated fn | contribute it to a group |
 /// | `#[fx::on_start]` / `#[fx::on_stop]` | `&self` method, sync or `async` | lifecycle hooks of the built value |
 /// | `#[fx::invoke]` | associated fn | run once at startup |
 /// | `#[fx::decorate]` | associated fn | wrap a value |
@@ -30,7 +43,7 @@ mod util;
 /// ```ignore
 /// #[fx::component]
 /// impl Clock {
-///     #[fx::provide]
+///     #[fx::constructor]
 ///     pub fn new() -> Self { Self }
 /// }
 /// ```
@@ -44,13 +57,36 @@ mod util;
 /// block per type.
 #[proc_macro_attribute]
 pub fn component(args: TokenStream, item: TokenStream) -> TokenStream {
-    util::run(|| {
-        let args = proc_macro2::TokenStream::from(args);
-        if !args.is_empty() {
-            return Err(syn::Error::new_spanned(args, "#[fx::component] takes no arguments"));
-        }
-        component::expand(syn::parse(item)?)
-    })
+    pipeline::run::<macros::ComponentMacro>(args, item)
+}
+
+/// Declares that a type may be used as an interface: `fx.As`, written where the trait is
+/// implemented.
+///
+/// ```ignore
+/// #[fx::bind]
+/// impl Clock for CounterClock {
+///     fn tick(&self) -> u32 { self.0.fetch_add(1, Ordering::SeqCst) }
+/// }
+/// ```
+///
+/// The attribute leaves the impl untouched and adds two things: an `fx::Bound<dyn Clock>`
+/// impl (so the cast is checked by the compiler and never written by hand), and a
+/// registration that is applied whenever `CounterClock` is registered as a component, by
+/// `providers = [CounterClock]` or `Options::component::<CounterClock>()`. From then on
+/// `Arc<dyn Clock>` can be injected, and a module can `exports = [dyn Clock]`, which
+/// publishes the interface while the concrete type stays private.
+///
+/// Options choose where the interface value goes, like on a constructor:
+/// `#[fx::bind(group)]`, `#[fx::bind(group = "jobs")]`, `#[fx::bind(name = "primary")]`.
+///
+/// Limitations: the impl must not be generic, and the trait needs `Send + Sync` as
+/// supertraits. A binding is only applied when the type is registered as a *component*;
+/// listing a single constructor function (`providers = [CounterClock::new]`) does not
+/// register bindings.
+#[proc_macro_attribute]
+pub fn bind(args: TokenStream, item: TokenStream) -> TokenStream {
+    pipeline::run::<macros::BindMacro>(args, item)
 }
 
 /// Declares an `fx` module on a unit struct.
@@ -59,7 +95,7 @@ pub fn component(args: TokenStream, item: TokenStream) -> TokenStream {
 /// #[fx::module(
 ///     name = "data",
 ///     imports = [ConfigModule],
-///     providers = [Database, fx::bind!(dyn Repo, SqlRepo::new)],
+///     providers = [Database, SqlRepo],
 ///     invokes = [migrate],
 ///     decorators = [traced],
 ///     exports = [Repo, Database as "primary"],
@@ -75,7 +111,7 @@ pub fn component(args: TokenStream, item: TokenStream) -> TokenStream {
 /// - `name`: defaults to the struct's name.
 #[proc_macro_attribute]
 pub fn module(args: TokenStream, item: TokenStream) -> TokenStream {
-    util::run(|| module::expand(args.into(), syn::parse(item)?))
+    pipeline::run::<macros::ModuleMacro>(args, item)
 }
 
 /// Bundles several parameters into one struct, like fx's `fx.In`.
@@ -94,7 +130,7 @@ pub fn module(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Every field type must itself be an `fx::Extract`. Generic structs are not supported.
 #[proc_macro_derive(Params)]
 pub fn params(item: TokenStream) -> TokenStream {
-    util::run(|| derive::params(syn::parse(item)?))
+    pipeline::run::<macros::ParamsMacro>(TokenStream::new(), item)
 }
 
 /// Lets a type be returned by value from constructors (`-> Self`), without an
@@ -108,5 +144,5 @@ pub fn params(item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(Component)]
 pub fn component_derive(item: TokenStream) -> TokenStream {
-    util::run(|| derive::component(syn::parse(item)?))
+    pipeline::run::<macros::ComponentDerive>(TokenStream::new(), item)
 }

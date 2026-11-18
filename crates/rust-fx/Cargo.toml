@@ -26,6 +26,7 @@ test = []
 
 [dependencies]
 rust-fx-macros = { workspace = true, optional = true }
+inventory = "0.3"
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { version = "1", features = ["rt", "sync", "time", "signal", "macros"] }

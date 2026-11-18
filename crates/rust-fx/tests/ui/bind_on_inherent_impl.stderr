@@ -1,0 +1,5 @@
+error: #[fx::bind] goes on a trait impl, `impl Trait for Type { .. }`: that is what names the interface
+ --> tests/ui/bind_on_inherent_impl.rs:4:6
+  |
+4 | impl Clock {
+  |      ^^^^^

@@ -10,6 +10,13 @@ All crates in the workspace share one version and are released together.
 ## [Unreleased]
 
 ### Changed
+
+- rust-fx: `fx::provide` / `Options::provide` / `#[fx::provide]` are now `fx::constructor` /
+  `Options::constructor` / `#[fx::constructor]`. `#[fx::constructor(as = ..)]` and the
+  `fx::bind!` macro are removed in favour of `#[fx::bind]`.
+- rust-fx-macros is organised as a compiler pipeline (parse, analyze, IR, generate) and now
+  reports every violation at once; unknown or contradictory options, duplicate module keys and
+  duplicate providers or exports are compile errors.
 - **Renamed the project from `nestrs` to `purlin`.** Every crate is now `purlin*` (`purlin`, `purlin-core`,
   `purlin-http`, `purlin-cli`, ...), the binary is `purlin`, Rust paths are `purlin_*`, and the outbox table is
   `purlin_outbox`. The headless DI/runtime layer ships separately as `rust-fx` (library `fx`).
@@ -22,6 +29,11 @@ All crates in the workspace share one version and are released together.
   `scripts/check-headless.sh` enforces it in CI.
 
 ### Added
+
+- `#[fx::bind]` on `impl Trait for Type` declares an interface binding (`fx::Bound`); it is
+  applied automatically wherever a constructor of the plain `Type` is registered, so
+  providers no longer write `as = dyn Trait`. Also `fx::bind::<dyn Trait, Type>()`,
+  `Options::bind` and `Provide::bind::<dyn Trait>()`.
 - `purlin::hosting`: `hosted::<AppModule>()` runs a purlin module graph inside an `fx::App` (bootstrap at start, destroy hooks at stop, `Arc<Hosted>` for other fx components); works without the `http` feature. With `http`, `hosting::serve`/`serve_with` run the HTTP server as an fx component; `App::from_bootstrapped` and `App::serve_on` back it.
 - `rust-fx` (library `fx`): a headless, fx-style application framework with no HTTP dependency.
   Function constructors (`provide`), `invoke`, `decorate`, `supply`, `bind!` (fx.As), named

@@ -1,8 +1,8 @@
 error[E0277]: `fn() -> Config {config}` cannot be registered as a provider
-  --> tests/ui/return_type_not_a_component.rs:11:36
+  --> tests/ui/return_type_not_a_component.rs:11:40
    |
-11 |     let _ = fx::App::new().provide(config);
-   |                            ------- ^^^^^^ not a valid constructor
+11 |     let _ = fx::App::new().constructor(config);
+   |                            ----------- ^^^^^^ not a valid constructor
    |                            |
    |                            required by a bound introduced by this call
    |
@@ -18,8 +18,8 @@ help: the following other types implement trait `IntoProvider<Marker>`
    | impl IntoProvider<Described> for Provider {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Provider`
    = note: required for `fn() -> Config {config}` to implement `IntoProvider<fx::descriptor::FromFunction<_>>`
-note: required by a bound in `App::provide`
+note: required by a bound in `App::constructor`
   --> src/app.rs
    |
-   |     pub fn provide<M>(mut self, provider: impl IntoProvider<M>) -> Self {
-   |                                                ^^^^^^^^^^^^^^^ required by this bound in `App::provide`
+   |     pub fn constructor<M>(mut self, provider: impl IntoProvider<M>) -> Self {
+   |                                                    ^^^^^^^^^^^^^^^ required by this bound in `App::constructor`

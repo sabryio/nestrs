@@ -75,7 +75,7 @@ purlin is built in two layers so that everything that is not HTTP can be reused 
 HTTP never changes frameworks:
 
 ```rust
-use purlin::fx;   // the same `fx::App`, `fx::provide`, `#[fx::module]` as the standalone crate
+use purlin::fx;   // the same `fx::App`, `fx::constructor`, `#[fx::module]` as the standalone crate
 ```
 
 The HTTP adapter is a feature of the `purlin` facade (`http`, on by default). A worker, a

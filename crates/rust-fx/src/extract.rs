@@ -199,7 +199,7 @@ impl<G: Tag> GroupName for G {
 /// fx::tag!(Primary = "primary");
 /// fn uses(db: fx::Named<Primary, String>) { let _ = db.len(); }
 /// let app = fx::App::new()
-///     .provide(fx::provide(|| Arc::new("db".to_string())).named("primary"))
+///     .constructor(fx::constructor(|| Arc::new("db".to_string())).named("primary"))
 ///     .invoke(uses);
 /// app.validate().unwrap();
 /// ```

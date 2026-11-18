@@ -1,0 +1,20 @@
+error[E0277]: `System` is not declared as an implementation of the interface `dyn Clock`
+ --> tests/ui/unbound_interface.rs:6:35
+  |
+6 |     let _ = fx::bind::<dyn Clock, System>();
+  |                                   ^^^^^^ missing `#[fx::bind]`
+  |
+help: the trait `fx::Bound<dyn Clock>` is not implemented for `System`
+ --> tests/ui/unbound_interface.rs:2:1
+  |
+2 | struct System;
+  | ^^^^^^^^^^^^^
+  = note: put `#[fx::bind]` on the `impl Trait for System` block that implements the interface
+note: required by a bound in `bind`
+ --> src/bind.rs
+  |
+  | pub fn bind<I, C>() -> Provide<I>
+  |        ---- required by a bound in this function
+...
+  |     C: Bound<I>,
+  |        ^^^^^^^^ required by this bound in `bind`

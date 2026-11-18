@@ -10,7 +10,7 @@ struct Config;
 #[tokio::test]
 async fn the_recorder_sees_construction_and_hooks_in_order() {
     let mut app = fx::test::App::new()
-        .provide(|life: Lifecycle| {
+        .constructor(|life: Lifecycle| {
             life.on_start(|| async {});
             life.on_stop(|| async {});
             Arc::new(Config)
@@ -35,8 +35,8 @@ async fn the_recorder_sees_construction_and_hooks_in_order() {
 async fn replace_keeps_the_real_provider_out_of_the_test() {
     struct Real;
     let mut app = fx::test::App::new()
-        .provide(|| -> Result<Arc<String>, std::io::Error> { Err(std::io::Error::other("would hit the network")) })
-        .provide(|_: Arc<String>| Arc::new(Real))
+        .constructor(|| -> Result<Arc<String>, std::io::Error> { Err(std::io::Error::other("would hit the network")) })
+        .constructor(|_: Arc<String>| Arc::new(Real))
         .replace(Arc::new(String::from("fake")));
     app.validate().unwrap();
     app.start().await.unwrap();

@@ -1,6 +1,6 @@
 //! Descriptors: what a registered function looks like to the graph.
 //!
-//! [`provide`], [`decorate`] and [`invoke`] wrap a function in a descriptor. The typed
+//! [`constructor`], [`decorate`] and [`invoke`] wrap a function in a descriptor. The typed
 //! builders ([`Provide`], [`Decorate`]) let you refine it (`named`, `in_group`, hooks,
 //! `bind`); registering it erases the type into a [`Provider`], [`Decorator`] or
 //! [`Invoke`] that the planner and runtime work with.
@@ -9,6 +9,7 @@ use std::future::Future;
 use std::panic::Location;
 use std::sync::Arc;
 
+use crate::bind::Bound;
 use crate::error::{BoxError, Result};
 use crate::extract::{Args, Context, DepKind, DepSpec};
 use crate::func::{Constructor, Invocation};
@@ -36,9 +37,9 @@ enum Slot {
 
 /// A constructor that is still being described.
 ///
-/// Created by [`provide`] or [`bind!`](crate::bind!); refine it with [`named`](Self::named),
+/// Created by [`constructor`] or [`bind`](crate::bind()); refine it with [`named`](Self::named),
 /// [`in_group`](Self::in_group), [`on_start`](Self::on_start) and friends, then hand it
-/// to [`Options::provide`](crate::Options::provide).
+/// to [`Options::constructor`](crate::Options::constructor).
 pub struct Provide<V: ?Sized + 'static> {
     ctor: Ctor<V>,
     specs: Vec<DepSpec>,
@@ -53,10 +54,10 @@ pub struct Provide<V: ?Sized + 'static> {
 /// use std::sync::Arc;
 /// struct Greeter(String);
 /// fn greeter() -> Arc<Greeter> { Arc::new(Greeter("hi".into())) }
-/// let _ = fx::provide(greeter);
+/// let _ = fx::constructor(greeter);
 /// ```
 #[track_caller]
-pub fn provide<F, M>(function: F) -> Provide<<F as Constructor<M>>::Value>
+pub fn constructor<F, M>(function: F) -> Provide<<F as Constructor<M>>::Value>
 where
     F: Constructor<M>,
 {
@@ -68,19 +69,6 @@ where
         origin,
         slot: Slot::Value(None),
     }
-}
-
-/// Provides the constructor's result as the interface `I` instead of its concrete
-/// type. This is `fx.As`; the macro [`bind!`](crate::bind!) writes the cast for you.
-///
-/// The concrete type is *not* provided; only `I` is.
-#[track_caller]
-pub fn bind<I, F, M>(function: F, cast: fn(Arc<<F as Constructor<M>>::Value>) -> Arc<I>) -> Provide<I>
-where
-    I: ?Sized + Send + Sync + 'static,
-    F: Constructor<M>,
-{
-    provide(function).bind(cast)
 }
 
 impl<V: ?Sized + Send + Sync + 'static> Provide<V> {
@@ -106,14 +94,20 @@ impl<V: ?Sized + Send + Sync + 'static> Provide<V> {
         self
     }
 
-    /// Provides the value as `I` instead; `cast` is usually `|v| v as Arc<dyn I>`.
+    /// Provides the value as the interface `I` *instead of* its concrete type (`fx.As`).
+    ///
+    /// Needs `V: Bound<I>`, which `#[fx::bind]` declares on the trait impl, so the cast
+    /// is never written by hand and a missing declaration is a compile error.
     #[must_use]
-    pub fn bind<I: ?Sized + Send + Sync + 'static>(self, cast: fn(Arc<V>) -> Arc<I>) -> Provide<I> {
+    pub fn bind<I: ?Sized + Send + Sync + 'static>(self) -> Provide<I>
+    where
+        V: Bound<I>,
+    {
         let inner = self.ctor;
         Provide {
             ctor: Arc::new(move |args, ctx| {
                 let future = inner(args, ctx)?;
-                Ok(Box::pin(async move { future.await.map(cast) }))
+                Ok(Box::pin(async move { future.await.map(<V as Bound<I>>::upcast) }))
             }),
             specs: self.specs,
             origin: self.origin,
@@ -263,7 +257,7 @@ where
 {
     #[track_caller]
     fn into_provider(self) -> Provider {
-        provide(self).into()
+        constructor(self).into()
     }
 }
 

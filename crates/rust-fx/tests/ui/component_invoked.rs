@@ -2,7 +2,7 @@ struct Worker;
 
 #[fx::component]
 impl Worker {
-    #[fx::provide]
+    #[fx::constructor]
     fn new() -> Self {
         Worker
     }
