@@ -50,6 +50,17 @@ pub fn new_project(
     Ok(templates::project(&package, &lib, source).apply(workspace, options.force, options.dry_run)?)
 }
 
+/// `purlin new <name> --kind worker`: a headless service on `rust-fx` alone.
+pub fn new_worker(
+    workspace: &mut dyn Workspace,
+    name: &str,
+    source: &DependencySource,
+    options: Options,
+) -> Result<Report, CliError> {
+    let (package, lib) = crate_names(name)?;
+    Ok(templates::worker(&package, &lib, source).apply(workspace, options.force, options.dry_run)?)
+}
+
 /// `purlin generate feature <name>`: adds a vertical slice to the project in `workspace`.
 pub fn new_feature(
     workspace: &mut dyn Workspace,

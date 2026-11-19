@@ -1,6 +1,6 @@
 [package]
 name = "purlin-otel"
-description = "OpenTelemetry for purlin: OTLP export, HTTP server spans, W3C trace propagation across queues"
+description = "OpenTelemetry for purlin: OTLP export, W3C trace propagation across queues, and (feature `http`) HTTP server spans"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,8 +12,14 @@ keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
 
+[features]
+default = ["http"]
+## `HttpTracing`, the server-span interceptor. Turn it off for workers: telemetry export and
+## queue propagation need no HTTP stack.
+http = ["dep:purlin-http"]
+
 [dependencies]
-purlin-http.workspace = true
+purlin-http = { workspace = true, optional = true }
 purlin-jobs.workspace = true
 opentelemetry = "0.33.1"
 opentelemetry-otlp = { version = "0.33.1", default-features = false, features = ["trace", "http-proto", "reqwest-client"] }
@@ -34,3 +40,7 @@ tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "http"
+required-features = ["http"]

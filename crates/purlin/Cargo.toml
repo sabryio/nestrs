@@ -23,13 +23,9 @@ http = ["dep:purlin-http"]
 [dependencies]
 async-trait = "0.1"
 purlin-core.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tracing.workspace = true
 purlin-config.workspace = true
 purlin-http = { workspace = true, optional = true }
 purlin-macros.workspace = true
-rust-fx.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite = "0.26"
@@ -85,8 +81,4 @@ required-features = ["http"]
 
 [[test]]
 name = "ui"
-required-features = ["http"]
-
-[[test]]
-name = "hosting_http"
 required-features = ["http"]

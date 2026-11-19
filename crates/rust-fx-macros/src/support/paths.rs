@@ -3,9 +3,9 @@ use quote::quote;
 
 /// The path under which the expanded code reaches the `fx` crate.
 ///
-/// `::fx` when the caller depends on `rust-fx` directly, `::purlin::fx` when it only
-/// depends on `purlin` (which re-exports it), or whatever name the caller gave the
-/// dependency in its manifest.
+/// `::fx` when the caller depends on `rust-fx` (the library is called `fx`), or whatever name
+/// the caller gave the dependency in its manifest. No other crate is consulted: `fx` does not
+/// know `purlin`, nor any other framework built on it.
 pub(crate) fn fx_path() -> TokenStream {
     use proc_macro_crate::{FoundCrate, crate_name};
 
@@ -18,12 +18,7 @@ pub(crate) fn fx_path() -> TokenStream {
             let name = named(&name);
             quote!(::#name)
         }
-        Err(_) => match crate_name("purlin") {
-            Ok(FoundCrate::Name(name)) => {
-                let name = named(&name);
-                quote!(::#name::fx)
-            }
-            Ok(FoundCrate::Itself) | Err(_) => quote!(::fx),
-        },
+        // Not found in the manifest (macro unit tests, doctests): the conventional name.
+        Err(_) => quote!(::fx),
     }
 }

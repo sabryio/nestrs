@@ -22,7 +22,7 @@ pub struct ClockModule;
 
 fn announce(clock: Arc<Clock>) { /* runs once at startup */ }
 
-#[tokio::main]
+#[fx::main]                       // like #[tokio::main], on the runtime fx re-exports
 async fn main() -> fx::Result<()> {
     let code = fx::App::new()
         .module::<ClockModule>()
@@ -32,6 +32,15 @@ async fn main() -> fx::Result<()> {
     std::process::exit(code)
 }
 ```
+
+### No direct `tokio` dependency needed
+
+`fx::tokio` re-exports the runtime, and `#[fx::main]` accepts the same options as
+`#[tokio::main]` (`flavor = "current_thread"`, `worker_threads = 2`). Spawn and sleep through
+`fx::tokio::spawn` / `fx::tokio::time::sleep`. Features beyond `rt`, `rt-multi-thread`,
+`sync`, `time`, `signal` and `macros` (such as `net`) still need `tokio` in your manifest;
+Cargo unifies them. `#[tokio::test]` also needs a direct (dev-)dependency, because that macro
+names the crate itself.
 
 ### Binding ports to adapters
 

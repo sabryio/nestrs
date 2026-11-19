@@ -307,3 +307,47 @@ async fn module_options_and_named_exports() {
     app.start().await.unwrap();
     assert!(app.get_named::<Db>("primary").await.is_ok());
 }
+
+// ---- ports -----------------------------------------------------------------------------
+
+#[fx::port]
+trait Mailer {
+    fn send(&self, to: &str) -> String;
+}
+
+struct Smtp;
+
+#[derive(fx::Component)]
+struct Outbox;
+
+#[fx::bind]
+impl Mailer for Smtp {
+    fn send(&self, to: &str) -> String {
+        format!("smtp:{to}")
+    }
+}
+
+#[fx::component]
+impl Smtp {
+    #[fx::constructor]
+    fn new() -> Self {
+        Self
+    }
+}
+
+#[fx::module(providers = [Smtp], exports = [MailerPort])]
+struct MailModule;
+
+#[tokio::test]
+async fn a_port_is_a_type_name_for_the_interface_and_never_needs_dyn() {
+    let _ = Outbox;
+    let seen = Arc::new(Mutex::new(String::new()));
+    let s = seen.clone();
+    App::new()
+        .module::<MailModule>()
+        .invoke(move |mailer: Arc<MailerPort>| *s.lock().unwrap() = mailer.send("a"))
+        .run_until_started()
+        .await
+        .unwrap();
+    assert_eq!(*seen.lock().unwrap(), "smtp:a");
+}

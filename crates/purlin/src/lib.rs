@@ -41,8 +41,6 @@ pub use async_trait::async_trait;
 /// The headless application framework purlin is built on: constructors, invokes,
 /// decorators, modules with private scope, lifecycle hooks and a graceful runtime.
 /// Everything in it works without the `http` feature.
-pub use fx;
-pub mod hosting;
 pub use purlin_core::*;
 #[cfg(feature = "http")]
 pub use purlin_macros::controller;

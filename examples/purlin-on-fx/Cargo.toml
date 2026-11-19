@@ -1,0 +1,19 @@
+[package]
+name = "purlin-on-fx"
+description = "A purlin web service running inside an fx application, through the purlin-fx adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+# The two frameworks do not know each other. This example depends on both, plus the adapter
+# that joins them.
+[dependencies]
+purlin = { workspace = true, features = ["http"] }
+purlin-fx.workspace = true
+rust-fx.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -1,14 +1,20 @@
-//! Hosting a purlin module graph inside an [`fx::App`].
+//! # purlin-fx
 //!
-//! purlin's module system (`#[module]`, `#[injectable]`, request scopes) still runs on
-//! `purlin-core`. This bridge lets such a graph live *inside* an fx application, so the two
-//! layers share one lifecycle, one set of signals and one shutdown path:
+//! The adapter between two independent frameworks: [`rust-fx`](fx) (dependency injection,
+//! lifecycle, a graceful runtime) and `purlin` (modules, controllers, request scopes).
+//! Neither depends on the other; this crate depends on both and is the only place they meet.
+//!
+//! It lets a purlin module graph live *inside* an [`fx::App`], so the two share one
+//! lifecycle, one set of signals and one shutdown path:
 //!
 //! ```no_run
-//! # use purlin::{fx, hosting};
 //! # #[purlin::module] struct AppModule;
 //! # async fn demo() -> fx::Result<()> {
-//! fx::App::new().options(hosting::hosted::<AppModule>()).run().await?;
+//! fx::App::new()
+//!     .options(purlin_fx::hosted::<AppModule>())
+//!     .options(purlin_fx::serve("0.0.0.0:3000"))   // with the `http` feature
+//!     .run()
+//!     .await?;
 //! # Ok(()) }
 //! ```
 //!
@@ -19,9 +25,9 @@
 
 use std::sync::Arc;
 
-use fx::Options;
 use std::sync::Mutex;
 
+use fx::Options;
 use purlin_core::{Container, DiError, Module, MountedController, ScopedProviders, Shutdown};
 
 /// A bootstrapped purlin module graph, owned by an fx application.
@@ -217,12 +223,11 @@ mod serve {
     /// Combine with [`hosted`](super::hosted):
     ///
     /// ```no_run
-    /// # use purlin::{fx, hosting};
     /// # #[purlin::module] struct AppModule;
     /// # async fn demo() -> fx::Result<()> {
     /// fx::App::new()
-    ///     .options(hosting::hosted::<AppModule>())
-    ///     .options(hosting::serve("0.0.0.0:3000"))
+    ///     .options(purlin_fx::hosted::<AppModule>())
+    ///     .options(purlin_fx::serve("0.0.0.0:3000"))
     ///     .run()
     ///     .await?;
     /// # Ok(()) }

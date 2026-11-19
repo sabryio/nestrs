@@ -1,0 +1,5 @@
+error: the function marked #[fx::main] takes no arguments
+ --> tests/ui/main_with_arguments.rs:3:15
+  |
+3 | async fn main(_args: Vec<String>) {}
+  |               ^^^^^^^^^^^^^^^^^^

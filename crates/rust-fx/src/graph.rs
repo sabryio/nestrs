@@ -10,14 +10,14 @@
 //!   imported module's export, or the root's), then threads it through the decorators
 //!   that apply, producing a chain of nodes.
 
-use std::any::TypeId;
 use std::collections::HashMap;
 
+use crate::descriptor::Lifetime;
 use crate::descriptor::{Decorator, Invoke, Provider};
 use crate::error::{Error, Result};
 use crate::extract::{DepKind, DepSpec};
 use crate::key::{Key, Origin, shorten};
-use crate::module::ModuleRef;
+use crate::module::{ModuleId, ModuleRef};
 use crate::options::{Item, Options, Replacement};
 use crate::value::Stored;
 
@@ -29,6 +29,7 @@ struct Scope {
     name: String,
     imports: Vec<ScopeId>,
     exports: Vec<Key>,
+    global: bool,
 }
 
 /// How a dependency of a node was resolved.
@@ -116,6 +117,43 @@ impl Plan {
         order
     }
 
+    pub(crate) fn lifetime(&self, node: NodeId) -> Lifetime {
+        match self.nodes[node].kind {
+            NodeKind::Provider(i) => self.providers[i].provider.lifetime,
+            _ => Lifetime::Singleton,
+        }
+    }
+
+    /// Every singleton provider node (not decorators or invokes), in registration order.
+    pub(crate) fn singleton_providers(&self) -> Vec<NodeId> {
+        (0..self.nodes.len())
+            .filter(|&n| matches!(self.nodes[n].kind, NodeKind::Provider(_)) && self.lifetime(n) == Lifetime::Singleton)
+            .collect()
+    }
+
+    /// The singletons that non-singleton nodes need (directly, or through other
+    /// non-singletons): they must exist before the first scope is opened.
+    pub(crate) fn singletons_behind_scoped(&self) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        let mut seen = vec![false; self.nodes.len()];
+        let mut stack: Vec<NodeId> = (0..self.nodes.len())
+            .filter(|&n| self.lifetime(n) != Lifetime::Singleton)
+            .collect();
+        while let Some(node) = stack.pop() {
+            for &dep in &self.nodes[node].deps {
+                if std::mem::replace(&mut seen[dep], true) {
+                    continue;
+                }
+                if self.lifetime(dep) == Lifetime::Singleton {
+                    out.push(dep);
+                } else {
+                    stack.push(dep);
+                }
+            }
+        }
+        out
+    }
+
     pub(crate) fn origin(&self, node: NodeId) -> Origin {
         match self.nodes[node].kind {
             NodeKind::Provider(i) => self.providers[i].provider.origin,
@@ -142,7 +180,7 @@ struct Planner {
     provided: HashMap<(ScopeId, Key), usize>,
     members: HashMap<Key, Vec<usize>>,
     decorators_by: HashMap<(ScopeId, Key), Vec<usize>>,
-    module_scopes: HashMap<TypeId, ScopeId>,
+    module_scopes: HashMap<ModuleId, ScopeId>,
     nodes: Vec<Node>,
     decorator_nodes: HashMap<(usize, NodeId), NodeId>,
 }
@@ -153,6 +191,7 @@ impl Planner {
             name: "root".into(),
             imports: Vec::new(),
             exports: Vec::new(),
+            global: false,
         });
         self.register(ROOT, options, &mut Vec::new())?;
         self.apply_replacements()?;
@@ -187,6 +226,8 @@ impl Planner {
         for node in 0..total {
             self.expand(node, &mut Vec::new())?;
         }
+
+        self.check_lifetimes()?;
 
         let root_view = self.root_view()?;
         Ok(Plan {
@@ -236,13 +277,14 @@ impl Planner {
             return Ok(scope);
         }
 
-        stack.push(module);
-        let definition = (module.definition)();
+        stack.push(module.clone());
+        let definition = module.define();
         let scope = self.scopes.len();
         self.scopes.push(Scope {
             name: definition.name.to_string(),
             imports: Vec::new(),
             exports: definition.exports,
+            global: definition.global,
         });
         for import in definition.imports {
             let imported = self.add_module(import, stack)?;
@@ -364,6 +406,26 @@ impl Planner {
         }
         if let Some((_, node)) = found.pop() {
             return Ok(node);
+        }
+
+        // Global modules' exports are visible everywhere, after explicit imports.
+        if found.is_empty() {
+            let globals: Vec<ScopeId> = (0..self.scopes.len())
+                .filter(|&g| g != scope && self.scopes[g].global && self.scopes[g].exports.contains(&key))
+                .collect();
+            for global in globals {
+                match self.inner(global, key) {
+                    Ok(node) if !found.iter().any(|&(_, n)| n == node) => found.push((global, node)),
+                    Ok(_) | Err(Miss::Absent) => {}
+                    Err(other) => return Err(other),
+                }
+            }
+            if found.len() > 1 {
+                return Err(Miss::Ambiguous(found.into_iter().map(|(s, _)| s).collect()));
+            }
+            if let Some((_, node)) = found.pop() {
+                return Ok(node);
+            }
         }
 
         if scope != ROOT
@@ -518,6 +580,38 @@ impl Planner {
         slot.args = args;
         slot.deps = deps;
         slot.mark = Mark::Done;
+        Ok(())
+    }
+
+    fn lifetime_of(&self, node: NodeId) -> Lifetime {
+        match self.nodes[node].kind {
+            NodeKind::Provider(i) => self.providers[i].provider.lifetime,
+            _ => Lifetime::Singleton,
+        }
+    }
+
+    /// Only a non-singleton may depend on a non-singleton.
+    fn check_lifetimes(&self) -> Result<()> {
+        for node in 0..self.nodes.len() {
+            if self.lifetime_of(node) != Lifetime::Singleton {
+                continue;
+            }
+            for &dep in &self.nodes[node].deps {
+                let lifetime = self.lifetime_of(dep);
+                if lifetime != Lifetime::Singleton
+                    && let Some(key) = self.nodes[dep].key
+                {
+                    return Err(Error::ScopeMismatch {
+                        consumer: self.describe(node).into(),
+                        key,
+                        lifetime: match lifetime {
+                            Lifetime::Request => "request-scoped",
+                            _ => "transient",
+                        },
+                    });
+                }
+            }
+        }
         Ok(())
     }
 

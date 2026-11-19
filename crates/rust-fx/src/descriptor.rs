@@ -29,6 +29,31 @@ pub(crate) type InvokeFn =
 /// A hook body, ready to be handed to the lifecycle.
 type HookWork<T> = Box<dyn FnOnce() -> BoxFuture<'static, T> + Send>;
 
+/// How long a provided value lives.
+///
+/// Rule, checked when the graph is planned: *only a non-singleton may depend on a
+/// non-singleton*. A singleton holding a request-scoped value would pin the first
+/// request's state forever, so it is reported as [`Error::ScopeMismatch`](crate::Error).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Lifetime {
+    /// One instance for the whole app (the default).
+    Singleton,
+    /// One instance per [`RequestScope`](crate::RequestScope), built on first use.
+    Request,
+    /// A new instance every time it is resolved.
+    Transient,
+}
+
+impl std::fmt::Display for Lifetime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Singleton => "singleton",
+            Self::Request => "request-scoped",
+            Self::Transient => "transient",
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Slot {
     Value(Option<&'static str>),
@@ -45,6 +70,7 @@ pub struct Provide<V: ?Sized + 'static> {
     specs: Vec<DepSpec>,
     origin: Origin,
     slot: Slot,
+    lifetime: Lifetime,
 }
 
 /// Describes `function` as a constructor: its parameters are its dependencies and its
@@ -68,6 +94,7 @@ where
         specs: F::specs(),
         origin,
         slot: Slot::Value(None),
+        lifetime: Lifetime::Singleton,
     }
 }
 
@@ -77,6 +104,21 @@ impl<V: ?Sized + Send + Sync + 'static> Provide<V> {
     #[must_use]
     pub fn named(mut self, name: &'static str) -> Self {
         self.slot = Slot::Value(Some(name));
+        self
+    }
+
+    /// Builds the value lazily, once per [`RequestScope`](crate::RequestScope).
+    /// Lifecycle hooks only run for singletons.
+    #[must_use]
+    pub fn request(mut self) -> Self {
+        self.lifetime = Lifetime::Request;
+        self
+    }
+
+    /// Builds a new value every time it is resolved from a scope.
+    #[must_use]
+    pub fn transient(mut self) -> Self {
+        self.lifetime = Lifetime::Transient;
         self
     }
 
@@ -112,6 +154,7 @@ impl<V: ?Sized + Send + Sync + 'static> Provide<V> {
             specs: self.specs,
             origin: self.origin,
             slot: self.slot,
+            lifetime: self.lifetime,
         }
     }
 
@@ -166,6 +209,7 @@ impl<V: ?Sized + Send + Sync + 'static> Provide<V> {
             specs: self.specs,
             origin: self.origin,
             slot: self.slot,
+            lifetime: self.lifetime,
         }
     }
 }
@@ -177,12 +221,37 @@ pub struct Provider {
     pub(crate) specs: Vec<DepSpec>,
     pub(crate) build: BuildFn,
     pub(crate) origin: Origin,
+    pub(crate) lifetime: Lifetime,
 }
 
 impl Provider {
     /// What this provider provides (or, for a group member, the group it joins).
     pub fn key(&self) -> Key {
         self.key
+    }
+
+    /// How long its value lives.
+    pub fn lifetime(&self) -> Lifetime {
+        self.lifetime
+    }
+
+    /// A request-scoped `T` that the transport supplies for every scope with
+    /// [`RequestScope::seed`](crate::RequestScope::seed). Declaring it lets other
+    /// scoped providers depend on it.
+    pub(crate) fn seeded<T: ?Sized + Send + Sync + 'static>(location: &'static Location<'static>) -> Self {
+        let key = Key::of::<T>();
+        Self {
+            key,
+            specs: Vec::new(),
+            build: Arc::new(move |_, _| {
+                Ok(Box::pin(std::future::ready(Err(format!(
+                    "`{key}` is seeded per scope, but nothing seeded it"
+                )
+                .into()))))
+            }),
+            origin: Origin::new("seeded", location),
+            lifetime: Lifetime::Request,
+        }
     }
 
     /// Where it was registered.
@@ -203,6 +272,7 @@ impl Provider {
             specs: Vec::new(),
             build: Arc::new(move |_, _| Ok(Box::pin(std::future::ready(Ok(stored.clone()))))),
             origin: Origin::new(name, location),
+            lifetime: Lifetime::Singleton,
         }
     }
 }
@@ -223,6 +293,7 @@ impl<V: ?Sized + Send + Sync + 'static> From<Provide<V>> for Provider {
                 Ok(Box::pin(async move { future.await.map(store::<V>) }))
             }),
             origin: provide.origin,
+            lifetime: provide.lifetime,
         }
     }
 }

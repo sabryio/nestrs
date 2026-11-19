@@ -1,6 +1,8 @@
 //! Modules: named, reusable bundles of options with a private scope.
 
 use std::any::TypeId;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::key::Key;
 use crate::options::Options;
@@ -23,22 +25,49 @@ pub trait Module: 'static {
     }
 }
 
+/// What makes two imports "the same module".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ModuleId {
+    /// A [`Module`] type: every `ModuleRef::of::<M>()` is the same module.
+    Type(TypeId),
+    /// A configured instance: clones of one [`ModuleRef`] are the same module,
+    /// two separately built ones are not.
+    Instance(u64),
+}
+
+#[derive(Clone)]
+enum Source {
+    Static(fn() -> ModuleDef),
+    Dynamic(Arc<ModuleDef>),
+}
+
 /// A lazy reference to a module, so that import cycles can be reported instead of
 /// recursing forever.
-#[derive(Clone, Copy)]
+///
+/// Importing the same module from several places builds it once. For a [`Module`]
+/// type identity is the type; for a configured module ([`ModuleDef::into_ref`])
+/// identity is the instance, so clone one `ModuleRef` to share it.
+#[derive(Clone)]
 pub struct ModuleRef {
-    pub(crate) id: TypeId,
+    pub(crate) id: ModuleId,
     pub(crate) name: &'static str,
-    pub(crate) definition: fn() -> ModuleDef,
+    source: Source,
 }
 
 impl ModuleRef {
     /// A reference to module `M`.
     pub fn of<M: Module>() -> Self {
         Self {
-            id: TypeId::of::<M>(),
+            id: ModuleId::Type(TypeId::of::<M>()),
             name: std::any::type_name::<M>(),
-            definition: M::definition,
+            source: Source::Static(M::definition),
+        }
+    }
+
+    pub(crate) fn define(&self) -> ModuleDef {
+        match &self.source {
+            Source::Static(definition) => definition(),
+            Source::Dynamic(definition) => ModuleDef::clone(definition),
         }
     }
 }
@@ -50,8 +79,10 @@ impl std::fmt::Debug for ModuleRef {
 }
 
 /// What a module is made of.
+#[derive(Clone)]
 pub struct ModuleDef {
     pub(crate) name: &'static str,
+    pub(crate) global: bool,
     pub(crate) imports: Vec<ModuleRef>,
     pub(crate) options: Options,
     pub(crate) exports: Vec<Key>,
@@ -62,9 +93,38 @@ impl ModuleDef {
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
+            global: false,
             imports: Vec::new(),
             options: Options::new(),
             exports: Vec::new(),
+        }
+    }
+
+    /// Makes this module's exports visible to every module in the graph without an
+    /// explicit import (configuration, logging, a database pool).
+    ///
+    /// The module must still be part of the graph: import it once, typically from
+    /// the root.
+    #[must_use]
+    pub fn global(mut self) -> Self {
+        self.global = true;
+        self
+    }
+
+    /// Turns a runtime-built definition into an importable reference: the building
+    /// block of configurable modules (`DatabaseModule::for_root(config)`).
+    ///
+    /// Clone the returned reference to import one instance from several places.
+    /// Two separate calls make two instances; if both provide the same key the
+    /// planner reports [`Error::Duplicate`](crate::Error) rather than silently
+    /// picking a configuration.
+    #[must_use]
+    pub fn into_ref(self) -> ModuleRef {
+        static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(0);
+        ModuleRef {
+            id: ModuleId::Instance(NEXT_INSTANCE.fetch_add(1, Ordering::Relaxed)),
+            name: self.name,
+            source: Source::Dynamic(Arc::new(self)),
         }
     }
 

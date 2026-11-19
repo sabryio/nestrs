@@ -13,7 +13,7 @@ pub enum DependencySource {
 }
 
 impl DependencySource {
-    fn dep(&self, crate_name: &str) -> String {
+    pub(crate) fn dep(&self, crate_name: &str) -> String {
         match self {
             Self::Version(version) => format!("{crate_name} = \"{version}\""),
             Self::Path(root) => format!(

@@ -999,6 +999,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fx-axum"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http-body-util",
+ "rust-fx",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1101,7 +1114,7 @@ dependencies = [
 name = "headless-worker"
 version = "0.1.0"
 dependencies = [
- "purlin",
+ "rust-fx",
  "tokio",
 ]
 
@@ -2055,14 +2068,11 @@ dependencies = [
  "purlin-core",
  "purlin-http",
  "purlin-macros",
- "rust-fx",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
  "tokio-tungstenite 0.26.2",
  "tower",
- "tracing",
  "trybuild",
  "utoipa",
  "uuid",
@@ -2126,6 +2136,19 @@ version = "0.1.0"
 dependencies = [
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "purlin-fx"
+version = "0.1.0"
+dependencies = [
+ "purlin",
+ "purlin-core",
+ "purlin-http",
+ "rust-fx",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2233,6 +2256,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.10",
+]
+
+[[package]]
+name = "purlin-on-fx"
+version = "0.1.0"
+dependencies = [
+ "purlin",
+ "purlin-fx",
+ "rust-fx",
+ "tokio",
 ]
 
 [[package]]

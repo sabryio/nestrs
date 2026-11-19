@@ -1,4 +1,4 @@
-//! The five macros, each as one implementation of [`Macro`]: which parser, which analysis,
+//! The six macros, each as one implementation of [`Macro`]: which parser, which analysis,
 //! which generator. All behaviour lives in the stage modules.
 
 use proc_macro2::TokenStream;
@@ -112,5 +112,50 @@ impl Macro for ComponentDerive {
     }
     fn passthrough(_: &Self::Ast) -> TokenStream {
         TokenStream::new()
+    }
+}
+
+/// `#[fx::port]`
+pub(crate) struct PortMacro;
+
+impl Macro for PortMacro {
+    type Ast = ast::port::PortAst;
+    type Ir = ir::Port;
+
+    fn parse(args: TokenStream, item: TokenStream) -> syn::Result<Self::Ast> {
+        ast::port::parse(args, item)
+    }
+    fn analyze(ast: &Self::Ast, diagnostics: &mut Diagnostics) -> Self::Ir {
+        sema::port::analyze(ast, diagnostics)
+    }
+    fn generate(ir: &Self::Ir, _cx: &Context) -> TokenStream {
+        codegen::port::generate(ir)
+    }
+    fn passthrough(ast: &Self::Ast) -> TokenStream {
+        ast.item.to_token_stream()
+    }
+}
+
+/// `#[fx::main]`
+pub(crate) struct MainMacro;
+
+impl Macro for MainMacro {
+    type Ast = ast::main::MainAst;
+    type Ir = ir::Entry;
+
+    fn parse(args: TokenStream, item: TokenStream) -> syn::Result<Self::Ast> {
+        ast::main::parse(args, item)
+    }
+    fn analyze(ast: &Self::Ast, diagnostics: &mut Diagnostics) -> Self::Ir {
+        sema::main::analyze(ast, diagnostics)
+    }
+    fn generate(ir: &Self::Ir, cx: &Context) -> TokenStream {
+        codegen::main::generate(ir, cx)
+    }
+    fn passthrough(ast: &Self::Ast) -> TokenStream {
+        // Re-emitting the body would only add follow-up errors (`async main`, `.await` outside
+        // async); an empty stand-in keeps the name defined without them.
+        let (vis, name) = (&ast.item.vis, &ast.item.sig.ident);
+        quote::quote!(#vis fn #name() {})
     }
 }

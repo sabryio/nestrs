@@ -17,6 +17,7 @@ fails if a quoted block no longer matches its source file, so what you read is w
 | 7 | [Events and observability](07-events-and-observability.md) | the transactional outbox, traces |
 | 8 | [Testing](08-testing.md) | black-box tests, swapping providers |
 | 9 | [Ship it](09-ship-it.md) | the TypeScript contract, CI gates |
+| 10 | [A worker without HTTP](10-workers.md) | `rust-fx`, `#[fx::port]`, `#[fx::bind]`, `purlin new --kind worker`, using both frameworks |
 
 Prerequisites: Rust 1.89 or newer. Install the CLI from a checkout with `cargo install --path crates/purlin-cli`. To follow
 along in your own project use `purlin new blog-api --purlin-path <path to the checkout>`; the finished version is

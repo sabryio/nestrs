@@ -62,6 +62,14 @@ impl Options {
         }
     }
 
+    /// Declares a request-scoped `T` whose value the transport supplies for every
+    /// scope ([`RequestScope::seed`](crate::RequestScope::seed)).
+    #[must_use]
+    #[track_caller]
+    pub fn seeded<T: ?Sized + Send + Sync + 'static>(self) -> Self {
+        self.push(Item::Provide(Provider::seeded::<T>(Location::caller())))
+    }
+
     /// Registers a function to run at startup (`fx.Invoke`).
     #[must_use]
     #[track_caller]
@@ -96,6 +104,13 @@ impl Options {
     #[must_use]
     pub fn module<M: Module>(self) -> Self {
         self.push(Item::Module(ModuleRef::of::<M>()))
+    }
+
+    /// Imports a module by reference: the form for configured modules built with
+    /// [`ModuleDef::into_ref`](crate::ModuleDef::into_ref).
+    #[must_use]
+    pub fn module_ref(self, module: ModuleRef) -> Self {
+        self.push(Item::Module(module))
     }
 
     /// Registers everything a [`Component`] declares (`#[fx::component]`).

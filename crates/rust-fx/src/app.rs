@@ -13,6 +13,7 @@ use crate::lifecycle::{Lifecycle, Registry};
 use crate::module::Module;
 use crate::observer::{Event, Observer, Tracing};
 use crate::options::Options;
+use crate::scope::Scopes;
 use crate::shutdown::{Shutdowner, Signal, os_signal};
 use crate::value::{Stored, load};
 
@@ -38,6 +39,7 @@ pub struct App {
     start_timeout: Duration,
     stop_timeout: Duration,
     shutdowner: Shutdowner,
+    eager: bool,
     runtime: Option<Runtime>,
 }
 
@@ -56,8 +58,20 @@ impl App {
             start_timeout: DEFAULT_TIMEOUT,
             stop_timeout: DEFAULT_TIMEOUT,
             shutdowner: Shutdowner::new(),
+            eager: false,
             runtime: None,
         }
+    }
+
+    /// Builds *every* singleton at start, not only what the invokes reach.
+    ///
+    /// By default construction is lazy: a provider nobody needs is checked but never run.
+    /// Eager start suits frameworks that treat registration as intent (a provider's start
+    /// hook should run even if nothing injects it). Hooks still run in dependency order.
+    #[must_use]
+    pub fn eager(mut self) -> Self {
+        self.eager = true;
+        self
     }
 
     /// Adds a bundle of options.
@@ -193,6 +207,7 @@ impl App {
             registry,
             self.shutdowner.clone(),
             self.observer.clone(),
+            self.eager,
         ));
 
         let limit = self.start_timeout;
@@ -218,6 +233,20 @@ impl App {
             elapsed: began.elapsed(),
         });
         Ok(())
+    }
+
+    /// Opens request scopes over the running app; see [`Scopes`].
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotStarted`] before [`start`](Self::start).
+    pub fn scopes(&self) -> Result<Scopes> {
+        let runtime = self.runtime.as_ref().ok_or(Error::NotStarted)?;
+        Ok(Scopes::new(
+            runtime.plan.clone(),
+            runtime.values.clone(),
+            self.shutdowner.clone(),
+        ))
     }
 
     /// Runs the stop hooks in reverse order, bounded by the stop timeout. Every hook
@@ -331,7 +360,7 @@ impl std::fmt::Debug for App {
 
 /// The built graph plus everything constructed so far.
 struct Runtime {
-    plan: Plan,
+    plan: Arc<Plan>,
     values: Vec<Option<Stored>>,
     done: Vec<bool>,
     registry: Arc<Registry>,
@@ -339,24 +368,41 @@ struct Runtime {
     started: usize,
     shutdowner: Shutdowner,
     observer: Arc<dyn Observer>,
+    eager: bool,
 }
 
 impl Runtime {
-    fn new(plan: Plan, registry: Arc<Registry>, shutdowner: Shutdowner, observer: Arc<dyn Observer>) -> Self {
+    fn new(
+        plan: Plan,
+        registry: Arc<Registry>,
+        shutdowner: Shutdowner,
+        observer: Arc<dyn Observer>,
+        eager: bool,
+    ) -> Self {
         let count = plan.nodes.len();
         Self {
-            plan,
+            plan: Arc::new(plan),
             values: vec![None; count],
             done: vec![false; count],
             registry,
             started: 0,
             shutdowner,
             observer,
+            eager,
         }
     }
 
     async fn start(&mut self) -> Result<()> {
         for node in self.plan.invoke_nodes.clone() {
+            self.ensure(node).await?;
+        }
+        if self.eager {
+            for node in self.plan.singleton_providers() {
+                self.ensure(node).await?;
+            }
+        }
+        // Scoped values are built later, per request, from singletons that must exist by then.
+        for node in self.plan.singletons_behind_scoped() {
             self.ensure(node).await?;
         }
         self.run_pending_starts().await

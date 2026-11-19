@@ -37,11 +37,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: scripts/check-headless.sh
       - run: cargo check -p purlin --no-default-features
-      - run: cargo check -p purlin-health -p purlin-sea-orm --no-default-features --all-targets
+      - run: cargo check -p purlin-fx --no-default-features
+      - run: cargo check -p purlin-health -p purlin-sea-orm -p purlin-otel --no-default-features --all-targets
       - run: cargo test -p rust-fx -p rust-fx-macros --all-features
       # rustc's exact wording is pinned to the stable toolchain used here.
       - run: cargo test -p rust-fx --test ui -- --ignored
       - run: cargo run -q -p rust-fx --example worker
+      - run: cargo test -p purlin-fx -p purlin-on-fx -p headless-worker
 
   # The declared rust-version must be the real one: build with exactly that toolchain.
   msrv:

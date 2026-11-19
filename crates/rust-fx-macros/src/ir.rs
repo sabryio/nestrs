@@ -100,3 +100,20 @@ pub(crate) enum ParamsShape {
 pub(crate) struct ComponentMarker {
     pub(crate) input: syn::DeriveInput,
 }
+
+/// A trait declared as an application port (`#[fx::port]`).
+pub(crate) struct Port {
+    /// The trait, with `Send + Sync` supertraits ensured.
+    pub(crate) item: syn::ItemTrait,
+    pub(crate) vis: syn::Visibility,
+    pub(crate) trait_ident: Ident,
+    /// The generated `type <alias> = dyn <Trait>`.
+    pub(crate) alias: Ident,
+}
+
+/// An async entry point (`#[fx::main]`).
+pub(crate) struct Entry {
+    pub(crate) item: syn::ItemFn,
+    /// Runtime options, passed through unchanged.
+    pub(crate) options: Vec<syn::Meta>,
+}

@@ -9,7 +9,7 @@ adapter, so you opt in with one dependency and the rest of the framework stays b
 | Piece | Role |
 | --- | --- |
 | `Telemetry` | Starts the pipeline (OTLP/HTTP, parent-based ratio sampling, resource) and gives you a `tracing-subscriber` layer |
-| `HttpTracing` | Interceptor: server span `METHOD /route/{template}`, continues an incoming `traceparent`, echoes one back |
+| `HttpTracing` (feature `http`, default) | Interceptor: server span `METHOD /route/{template}`, continues an incoming `traceparent`, echoes one back |
 | `OtelPropagation` | Implements `purlin-jobs`' `TracePropagation` port: queued messages carry the trace |
 | `OtelConfig` | Plain data: service name/version, endpoint, sample ratio, timeout, resource attributes |
 

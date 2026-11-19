@@ -123,6 +123,20 @@ pub enum Error {
         path: Vec<String>,
     },
 
+    /// A singleton (or an invoke) depends on a request-scoped or transient value.
+    #[error(
+        "{consumer} is a singleton but needs `{key}`, which is {lifetime}; make the consumer \
+         {lifetime} too, or resolve `{key}` from the request scope when it is needed"
+    )]
+    ScopeMismatch {
+        /// The long-lived consumer.
+        consumer: Box<str>,
+        /// The short-lived dependency.
+        key: Key,
+        /// Its lifetime, as text.
+        lifetime: &'static str,
+    },
+
     /// A decorator does not take the value it decorates.
     #[error("decorator {decorator} returns `{key}`, so it must also take `{key}` as an argument")]
     DecoratorInput {

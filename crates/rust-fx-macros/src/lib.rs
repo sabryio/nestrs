@@ -60,6 +60,28 @@ pub fn component(args: TokenStream, item: TokenStream) -> TokenStream {
     pipeline::run::<macros::ComponentMacro>(args, item)
 }
 
+/// Declares a trait as a port: a type name for an interface, so `dyn` is never written.
+///
+/// ```ignore
+/// #[fx::port]
+/// pub trait Clock {
+///     fn tick(&self) -> u32;
+/// }
+/// // generated: pub type ClockPort = dyn Clock;   (and `Send + Sync` supertraits)
+///
+/// fn work(clock: Arc<ClockPort>, jobs: fx::Group<JobPort>) { .. }
+///
+/// #[fx::module(providers = [CounterClock], exports = [ClockPort])]
+/// pub struct TimeModule;
+/// ```
+///
+/// `#[fx::port(Name)]` picks the alias name. The trait may not be generic. Pair it with
+/// `#[fx::bind]` on each implementation.
+#[proc_macro_attribute]
+pub fn port(args: TokenStream, item: TokenStream) -> TokenStream {
+    pipeline::run::<macros::PortMacro>(args, item)
+}
+
 /// Declares that a type may be used as an interface: `fx.As`, written where the trait is
 /// implemented.
 ///
@@ -145,4 +167,23 @@ pub fn params(item: TokenStream) -> TokenStream {
 #[proc_macro_derive(Component)]
 pub fn component_derive(item: TokenStream) -> TokenStream {
     pipeline::run::<macros::ComponentDerive>(TokenStream::new(), item)
+}
+
+/// Marks `async fn main`: starts the async runtime and runs the function on it, like
+/// `#[tokio::main]`, but through the runtime that `fx` re-exports, so no direct `tokio`
+/// dependency is needed.
+///
+/// ```ignore
+/// #[fx::main]
+/// async fn main() -> fx::Result<()> {
+///     let code = my_app().run().await?;
+///     std::process::exit(code);
+/// }
+/// ```
+///
+/// Options are those of `#[tokio::main]`: `#[fx::main(flavor = "current_thread")]`,
+/// `#[fx::main(worker_threads = 2)]`. `crate = ..` is reserved.
+#[proc_macro_attribute]
+pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
+    pipeline::run::<macros::MainMacro>(args, item)
 }

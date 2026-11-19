@@ -1,0 +1,5 @@
+error: #[fx::port] does not support generic traits: a port is one interface, so name each instantiation with its own trait
+ --> tests/ui/port_generic.rs:2:11
+  |
+2 | trait Repo<T> {
+  |           ^^^

@@ -11,6 +11,7 @@ use std::process::Command;
 use purlin_cli::DiskWorkspace;
 use purlin_cli::commands::{
     Options, new_controller, new_feature, new_job, new_module, new_port, new_project, new_queue_handler, new_use_case,
+    new_worker,
 };
 use purlin_cli::templates::DependencySource;
 
@@ -71,4 +72,37 @@ fn a_generated_project_with_features_builds_tests_and_lints_clean() {
     let target = repo.join("target");
     cargo(&project, &target, &["test", "--quiet"]);
     cargo(&project, &target, &["clippy", "--all-targets", "--", "-D", "warnings"]);
+}
+
+#[test]
+#[ignore = "builds a generated project; run with --ignored"]
+fn a_generated_worker_builds_tests_and_lints_clean_without_any_web_crate() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("sweeper");
+
+    let mut workspace = DiskWorkspace::new(&project);
+    let source = DependencySource::Path(repo.display().to_string());
+    new_worker(&mut workspace, "sweeper", &source, Options::default()).unwrap();
+
+    let target = repo.join("target");
+    cargo(&project, &target, &["test", "--quiet"]);
+    cargo(&project, &target, &["clippy", "--all-targets", "--", "-D", "warnings"]);
+
+    // The point of a worker: nothing web-shaped in its dependency tree.
+    let tree = Command::new(env!("CARGO"))
+        .args(["tree", "--edges", "normal", "--prefix", "none"])
+        .current_dir(&project)
+        .env("CARGO_TARGET_DIR", &target)
+        .output()
+        .expect("cargo tree runs");
+    let tree = String::from_utf8_lossy(&tree.stdout);
+    // Crate names only (the first word of each line): path-dependencies print their location.
+    let names: Vec<&str> = tree.lines().filter_map(|line| line.split_whitespace().next()).collect();
+    for forbidden in ["axum", "hyper", "tower", "purlin", "purlin-http", "utoipa"] {
+        assert!(!names.contains(&forbidden), "{forbidden} in the worker's tree:\n{tree}");
+    }
 }

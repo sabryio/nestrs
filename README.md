@@ -62,54 +62,49 @@ async fn main() -> Result<(), AppError> {
 }
 ```
 
-## Two layers: `fx` and `purlin`
+## Two independent frameworks: `fx` and `purlin`
 
-purlin is built in two layers so that everything that is not HTTP can be reused on its own.
-
-| Layer | Crates | Knows about |
+| | Crates | What it is |
 |---|---|---|
 | **`fx`** | `rust-fx` (library `fx`), `rust-fx-macros` | dependency injection, modules with private scope, lifecycle hooks, graceful start/stop, `Shutdowner`, observers, a test harness. No web stack. |
 | **purlin** | `purlin`, `purlin-http`, `purlin-jobs`, `purlin-outbox`, `purlin-sea-orm`, ... | controllers, guards, interceptors, OpenAPI, request scopes, plus adapters for queues, outbox, databases, Redis, telemetry |
+| **`purlin-fx`** | `purlin-fx` | the adapter between them |
 
-`purlin` depends on `rust-fx` and re-exports it as `purlin::fx`, so a service that outgrows
-HTTP never changes frameworks:
+**Neither framework knows the other.** `rust-fx` has no dependency on any `purlin` crate, and no
+`purlin` crate depends on `rust-fx` (`purlin` does not re-export `fx`). You can adopt, version and
+publish either alone. An application that wants both depends on both, plus `purlin-fx`, the only
+place where they meet. `scripts/check-headless.sh` (run in CI) fails if either side starts
+depending on the other.
 
-```rust
-use purlin::fx;   // the same `fx::App`, `fx::constructor`, `#[fx::module]` as the standalone crate
+```toml
+[dependencies]
+purlin = "0.1"
+rust-fx = "0.1"      # the library is called `fx`
+purlin-fx = "0.1"
 ```
 
-The HTTP adapter is a feature of the `purlin` facade (`http`, on by default). A worker, a
-queue consumer or a scheduler depends on `purlin = { default-features = false }` and gets no
-`axum`, `hyper` or `tower`. `purlin-jobs`, `purlin-cache` and `purlin-outbox` are headless
-already; `purlin-health` and `purlin-sea-orm` are headless with `default-features = false`.
-`scripts/check-headless.sh` (run in CI) fails if any of them pulls the HTTP stack back in.
-
-Status: `fx` is a complete, standalone runtime (see `crates/rust-fx/README.md`). purlin's own
-module system (`#[injectable]`, `#[module]`, request scopes) still runs on `purlin-core`;
-moving it onto `fx` is the next step. Until then the two interoperate through
-`purlin::hosting`, which runs a purlin module graph as one fx component:
-
-```rust
-use purlin::{fx, hosting};
-
-fx::App::new().options(hosting::hosted::<AppModule>()).run().await?;
-```
-
-With the `http` feature, `hosting::serve("0.0.0.0:3000")` adds the HTTP transport as another fx
-component (bound at construction, serving on start, draining on stop), and
-`serve_with(addr, |app| app.global_prefix("/api"))` customises the `App` first:
+`purlin-fx` runs a purlin module graph, and its HTTP server, as components of an `fx::App`:
 
 ```rust
 fx::App::new()
-    .options(hosting::hosted::<AppModule>())
-    .options(hosting::serve("0.0.0.0:3000"))
+    .options(purlin_fx::hosted::<AppModule>())
+    .options(purlin_fx::serve("0.0.0.0:3000"))   // or serve_with(addr, |app| app.global_prefix("/api"))
     .run()
     .await?;   // Ctrl-C / SIGTERM stop both the server and the module graph, in order
 ```
 
 The graph is bootstrapped during fx's start phase (a wiring mistake fails startup), its
-`#[on_destroy]` hooks run in reverse order during stop, and other fx components can take
-`Arc<hosting::Hosted>` to reach purlin singletons.
+`#[on_destroy]` hooks run in reverse order during stop, and fx components can take
+`Arc<purlin_fx::Hosted>` to reach purlin singletons. See `examples/purlin-on-fx`.
+
+The HTTP adapter is a feature of the `purlin` facade (`http`, on by default); a worker that
+uses purlin's DI depends on `purlin = { default-features = false }` and gets no `axum`, `hyper`
+or `tower`. A worker that wants fx only (`examples/headless-worker`) needs no purlin at all.
+
+Status: purlin's own module system (`#[injectable]`, `#[module]`, request scopes) still runs on
+`purlin-core`, a second DI engine next to `fx`. Because the frameworks are independent,
+moving purlin onto `fx` would add a dependency between them; the plan is to do it only if you
+decide the duplication is worth that coupling.
 
 ## Smallest example
 

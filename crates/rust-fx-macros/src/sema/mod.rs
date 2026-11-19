@@ -6,7 +6,9 @@
 pub(crate) mod bind;
 pub(crate) mod component;
 pub(crate) mod derive;
+pub(crate) mod main;
 pub(crate) mod module;
+pub(crate) mod port;
 
 use crate::ast::PlacementOptions;
 use crate::diagnostics::Diagnostics;

@@ -3,7 +3,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::macros::{BindMacro, ComponentMacro, ModuleMacro, ParamsMacro};
+use crate::macros::{BindMacro, ComponentMacro, MainMacro, ModuleMacro, ParamsMacro};
 use crate::pipeline::{Context, Macro, expand};
 
 fn cx() -> Context {
@@ -208,4 +208,77 @@ fn params_handles_every_struct_shape_and_rejects_the_rest() {
         ),
     );
     assert!(generic.contains("doesnotsupportgenericstructs"), "{generic}");
+}
+
+#[test]
+fn port_adds_supertraits_and_generates_the_alias() {
+    use crate::macros::PortMacro;
+    let out = run::<PortMacro>(
+        quote!(),
+        quote!(
+            pub trait Clock {
+                fn tick(&self) -> u32;
+            }
+        ),
+    );
+    assert_eq!(errors(&out), 0, "{out}");
+    assert!(
+        out.contains("traitClock:::core::marker::Send+::core::marker::Sync"),
+        "{out}"
+    );
+    assert!(out.contains("pubtypeClockPort=dynClock;"), "{out}");
+
+    let named = run::<PortMacro>(
+        quote!(Clocks),
+        quote!(
+            trait Clock: Send + Sync {}
+        ),
+    );
+    assert!(named.contains("typeClocks=dynClock;"), "{named}");
+    assert!(
+        !named.contains("::core::marker"),
+        "existing bounds are kept as written: {named}"
+    );
+}
+
+#[test]
+fn port_rejects_generic_traits_and_alias_clashes() {
+    use crate::macros::PortMacro;
+    let generic = run::<PortMacro>(
+        quote!(),
+        quote!(
+            trait Repo<T> {}
+        ),
+    );
+    assert!(generic.contains("doesnotsupportgenerictraits"), "{generic}");
+    let clash = run::<PortMacro>(
+        quote!(Clock),
+        quote!(
+            trait Clock {}
+        ),
+    );
+    assert!(clash.contains("mustdifferfromthetrait"), "{clash}");
+}
+
+#[test]
+fn main_delegates_to_the_runtime_fx_re_exports() {
+    let out = run::<MainMacro>(
+        quote!(flavor = "current_thread"),
+        quote! { async fn main() -> fx::Result<()> { Ok(()) } },
+    );
+    assert_eq!(errors(&out), 0, "{out}");
+    assert!(out.contains("::fx::__private::tokio::main"), "{out}");
+    assert!(out.contains("crate=\"::fx::__private::tokio\""), "{out}");
+    assert!(out.contains("flavor=\"current_thread\""), "{out}");
+}
+
+#[test]
+fn main_reports_every_problem_at_once() {
+    let out = run::<MainMacro>(quote!(crate = "other"), quote! { fn main(x: u8) {} });
+    assert_eq!(errors(&out), 3, "{out}");
+    assert!(out.contains("asyncfn"), "{out}");
+    assert!(out.contains("takesnoarguments"), "{out}");
+    assert!(out.contains("reserved") || out.contains("issetby"), "{out}");
+    // An empty stand-in keeps the name defined, so one mistake does not cause a cascade.
+    assert!(out.contains("fnmain(){}"), "{out}");
 }

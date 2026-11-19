@@ -11,6 +11,14 @@ All crates in the workspace share one version and are released together.
 
 ### Changed
 
+- `purlin-otel`: `HttpTracing` (the server-span interceptor) is behind the `http` feature (default
+  on). With `default-features = false`, telemetry export and queue propagation need no
+  axum, `purlin-http` or `utoipa`.
+
+- `purlin` no longer depends on `rust-fx` and no longer re-exports it as `purlin::fx`;
+  the `purlin::hosting` bridge moved to the new `purlin-fx` crate. The two frameworks are
+  independent, and `scripts/check-headless.sh` enforces it. `examples/headless-worker` now
+  depends on `rust-fx` only.
 - rust-fx: `fx::provide` / `Options::provide` / `#[fx::provide]` are now `fx::constructor` /
   `Options::constructor` / `#[fx::constructor]`. `#[fx::constructor(as = ..)]` and the
   `fx::bind!` macro are removed in favour of `#[fx::bind]`.
@@ -30,11 +38,21 @@ All crates in the workspace share one version and are released together.
 
 ### Added
 
+- `purlin new <name> --kind worker`: a layered, headless project on `rust-fx` alone (ports,
+  adapters, a job group, graceful shutdown, tests that replace the clock). Its dependency tree
+  is checked to contain no web crate.
+- Tutorial chapter 10, "A worker without HTTP".
+
+- `#[fx::port]` turns a trait into a port: it ensures `Send + Sync` supertraits and generates
+  `type <Trait>Port = dyn Trait`, so `Arc<ClockPort>`, `Group<JobPort>` and
+  `exports = [ClockPort]` never spell `dyn`.
+- `examples/purlin-on-fx`: a purlin web service running inside an fx application.
+
 - `#[fx::bind]` on `impl Trait for Type` declares an interface binding (`fx::Bound`); it is
   applied automatically wherever a constructor of the plain `Type` is registered, so
   providers no longer write `as = dyn Trait`. Also `fx::bind::<dyn Trait, Type>()`,
   `Options::bind` and `Provide::bind::<dyn Trait>()`.
-- `purlin::hosting`: `hosted::<AppModule>()` runs a purlin module graph inside an `fx::App` (bootstrap at start, destroy hooks at stop, `Arc<Hosted>` for other fx components); works without the `http` feature. With `http`, `hosting::serve`/`serve_with` run the HTTP server as an fx component; `App::from_bootstrapped` and `App::serve_on` back it.
+- `purlin-fx`: the adapter that joins purlin and rust-fx (`hosted::<AppModule>()` runs a purlin module graph inside an `fx::App` (bootstrap at start, destroy hooks at stop, `Arc<Hosted>` for other fx components); works without the `http` feature. With `http`, `serve`/`serve_with` run the HTTP server as an fx component; `App::from_bootstrapped` and `App::serve_on` back it.
 - `rust-fx` (library `fx`): a headless, fx-style application framework with no HTTP dependency.
   Function constructors (`provide`), `invoke`, `decorate`, `supply`, `bind!` (fx.As), named
   values and groups, `Option<Arc<T>>`, modules with private scope and exports, lifecycle hooks
@@ -88,3 +106,19 @@ First feature-complete version.
 - **CLI**: `purlin new` and `purlin generate feature|module|job|queue-handler`, editing existing
   Rust files by parsing them.
 - **Quality**: benchmarks against plain axum and a full-stack soak test.
+
+## Unreleased (stage 9)
+
+- rust-fx: `ModuleDef::global()`, `ModuleDef::into_ref()` (configured module instances) and `Options::module_ref`; `ModuleRef` is now `Clone` rather than `Copy`.
+- docs: `docs/design/unify-core-on-fx.md` records the decision to unify `purlin-core` on `fx` (purlin -> fx dependency allowed; fx -> purlin still forbidden) and the staged plan.
+
+## Unreleased (stage 10)
+
+- rust-fx: `Lifetime` (`Singleton`, `Request`, `Transient`); `Provide::request()` / `transient()`; `Options::seeded::<T>()`; `App::scopes()` returns a cloneable `Scopes` that opens `RequestScope`s (`seed`, `resolve`, `resolve_named`); `Error::ScopeMismatch` when a singleton or invoke needs a non-singleton.
+- rust-fx: singletons that scoped values depend on are built at start, even if no invoke reaches them.
+
+- examples: `fx-axum`, a plain axum service wired with rust-fx only (ports, module visibility, a controller group, the server as a lifecycle component with graceful stop). `check-headless.sh` also asserts it does not depend on purlin.
+
+- rust-fx: `fx::tokio` re-exports the async runtime; `#[fx::main]` is `#[tokio::main]` through that re-export (same options, `crate = ..` reserved), so programs need no direct `tokio` dependency to have a `main`. The macro goes through the same parse/analyze/IR/generate pipeline and reports non-async, argument-taking and `crate =` misuse together. `rust-fx` now enables tokio's `rt-multi-thread` feature. `headless-worker` no longer lists tokio as a normal dependency.
+
+- rust-fx: `App::eager()` builds every singleton at start instead of only what invokes reach. `tests/ordering.rs` pins start/stop ordering and failure handling (the guarantees purlin-core's bootstrap relies on).

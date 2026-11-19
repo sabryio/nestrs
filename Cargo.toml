@@ -18,12 +18,15 @@ members = [
     "crates/purlin-redis",
     "crates/purlin-sea-orm",
     "crates/purlin-testing",
+    "crates/purlin-fx",
     "crates/rust-fx",
     "crates/rust-fx-macros",
     "crates/purlin",
     "examples/blog-api",
     "examples/todo-minimal",
     "examples/headless-worker",
+    "examples/purlin-on-fx",
+    "examples/fx-axum",
 ]
 
 [workspace.package]
@@ -52,10 +55,11 @@ purlin-jobs = { path = "crates/purlin-jobs", version = "0.1.0" }
 purlin-jwt = { path = "crates/purlin-jwt", version = "0.1.0" }
 purlin-redis = { path = "crates/purlin-redis", version = "0.1.0" }
 purlin-kit = { path = "crates/purlin-kit", version = "0.1.0" }
-purlin-otel = { path = "crates/purlin-otel", version = "0.1.0" }
+purlin-otel = { path = "crates/purlin-otel", version = "0.1.0", default-features = false }
 purlin-outbox = { path = "crates/purlin-outbox", version = "0.1.0" }
 purlin-sea-orm = { path = "crates/purlin-sea-orm", version = "0.1.0", default-features = false }
 purlin = { path = "crates/purlin", version = "0.1.0", default-features = false }
+purlin-fx = { path = "crates/purlin-fx", version = "0.1.0" }
 rust-fx = { path = "crates/rust-fx", version = "0.1.0" }
 rust-fx-macros = { path = "crates/rust-fx-macros", version = "0.1.0" }
 

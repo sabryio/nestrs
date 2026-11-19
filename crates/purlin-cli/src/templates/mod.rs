@@ -5,11 +5,13 @@ mod feature;
 mod jobs;
 mod project;
 mod slices;
+mod worker;
 
 pub use feature::feature;
 pub use jobs::{job, module, queue_handler};
 pub use project::{DependencySource, project};
 pub use slices::{controller, port, use_case};
+pub use worker::worker;
 
 /// Replaces every `(token, value)` in `template`.
 pub(crate) fn fill(template: &str, tokens: &[(&str, &str)]) -> String {

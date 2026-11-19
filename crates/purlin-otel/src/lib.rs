@@ -5,7 +5,7 @@
 //!
 //! * [`Telemetry`] starts the pipeline (OTLP/HTTP export, sampling, resource) and gives you a
 //!   `tracing-subscriber` layer.
-//! * [`HttpTracing`] is an interceptor that opens the server span and continues the caller's trace.
+//! * `HttpTracing` (feature `http`, on by default) is an interceptor that opens the server span and continues the caller's trace.
 //! * [`OtelPropagation`] carries the trace through queued messages, so a worker's span is a child
 //!   of the request that enqueued the work.
 //!
@@ -22,12 +22,14 @@
 
 mod config;
 mod error;
+#[cfg(feature = "http")]
 mod http;
 mod propagation;
 mod telemetry;
 
 pub use config::OtelConfig;
 pub use error::OtelError;
+#[cfg(feature = "http")]
 pub use http::HttpTracing;
 pub use propagation::OtelPropagation;
 pub use telemetry::Telemetry;

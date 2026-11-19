@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use purlin_cli::commands::Options;
 use purlin_cli::templates::DependencySource;
 use purlin_cli::{DiskWorkspace, Report, commands};
@@ -34,12 +34,24 @@ impl From<Common> for Options {
     }
 }
 
+/// What `purlin new` creates.
+#[derive(Clone, Copy, ValueEnum)]
+enum Kind {
+    /// A web service: controllers, DTOs, purlin modules.
+    Service,
+    /// A headless worker on rust-fx: ports, adapters, a job group, graceful shutdown. No HTTP.
+    Worker,
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Create a new clean-architecture service in `./<name>`.
     New {
         /// Crate name, e.g. `shop-api`.
         name: String,
+        /// The kind of project to create.
+        #[arg(long, value_enum, default_value = "service")]
+        kind: Kind,
         /// Use a local checkout of purlin instead of the published crates.
         #[arg(long, value_name = "DIR")]
         purlin_path: Option<String>,
@@ -176,6 +188,7 @@ fn run(cli: Cli) -> Result<(), commands::CliError> {
         }
         Command::New {
             name,
+            kind,
             purlin_path,
             common,
         } => {
@@ -191,9 +204,18 @@ fn run(cli: Cli) -> Result<(), commands::CliError> {
                 DependencySource::Path,
             );
             let mut workspace = DiskWorkspace::new(PathBuf::from(&name));
-            let report = commands::new_project(&mut workspace, &name, &source, common.into())?;
-            print(&report, common.dry_run);
-            println!("\nNext:\n  cd {name}\n  purlin generate feature <name>\n  cargo run");
+            match kind {
+                Kind::Service => {
+                    let report = commands::new_project(&mut workspace, &name, &source, common.into())?;
+                    print(&report, common.dry_run);
+                    println!("\nNext:\n  cd {name}\n  purlin generate feature <name>\n  cargo run");
+                }
+                Kind::Worker => {
+                    let report = commands::new_worker(&mut workspace, &name, &source, common.into())?;
+                    print(&report, common.dry_run);
+                    println!("\nNext:\n  cd {name}\n  cargo test\n  cargo run   # Ctrl-C stops it gracefully");
+                }
+            }
         }
         Command::Generate {
             what:

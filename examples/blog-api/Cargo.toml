@@ -21,7 +21,7 @@ purlin-health = { workspace = true, features = ["http"] }
 purlin-interceptors.workspace = true
 purlin-jobs.workspace = true
 purlin-kit.workspace = true
-purlin-otel.workspace = true
+purlin-otel = { workspace = true, features = ["http"] }
 purlin-outbox.workspace = true
 purlin-redis.workspace = true
 purlin-sea-orm = { workspace = true, features = ["http", "sqlite", "postgres"] }

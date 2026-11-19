@@ -14,11 +14,13 @@ use fx::{App, Group, Lifecycle, Shutdowner};
 
 // ---- ports ---------------------------------------------------------------------
 
-trait Clock: Send + Sync {
+#[fx::port]
+trait Clock {
     fn tick(&self) -> u32;
 }
 
-trait Job: Send + Sync {
+#[fx::port]
+trait Job {
     fn name(&self) -> &'static str;
     fn run(&self, now: u32);
 }
@@ -84,7 +86,7 @@ impl Job for Report {
 
 // ---- modules -------------------------------------------------------------------
 
-#[fx::module(providers = [CounterClock], exports = [dyn Clock])]
+#[fx::module(providers = [CounterClock], exports = [ClockPort])]
 struct TimeModule;
 
 #[fx::module(providers = [Cleanup, Report])]
@@ -93,7 +95,7 @@ struct JobsModule;
 // ---- the worker itself -----------------------------------------------------------
 
 /// Runs every job every 50 ms, three times, then asks the app to stop.
-fn work(clock: Arc<dyn Clock>, jobs: Group<dyn Job>, life: Lifecycle, shutdown: Shutdowner) {
+fn work(clock: Arc<ClockPort>, jobs: Group<JobPort>, life: Lifecycle, shutdown: Shutdowner) {
     let handle = tokio::spawn(async move {
         for _ in 0..3 {
             let now = clock.tick();

@@ -62,6 +62,7 @@ mod lifecycle;
 mod module;
 mod observer;
 mod options;
+mod scope;
 mod shutdown;
 mod value;
 
@@ -71,8 +72,8 @@ pub mod test;
 pub use app::App;
 pub use bind::{Bound, bind};
 pub use descriptor::{
-    Decorate, Decorator, IntoDecorator, IntoInvoke, IntoProvider, Invoke, Provide, Provider, constructor, decorate,
-    invoke,
+    Decorate, Decorator, IntoDecorator, IntoInvoke, IntoProvider, Invoke, Lifetime, Provide, Provider, constructor,
+    decorate, invoke,
 };
 pub use error::{BoxError, Error, Phase, Result};
 pub use extract::{
@@ -84,17 +85,26 @@ pub use lifecycle::{Hook, HookOutcome, Lifecycle};
 pub use module::{Export, Module, ModuleDef, ModuleRef};
 pub use observer::{Event, Observer, Silent, Tracing};
 pub use options::Options;
+pub use scope::{RequestScope, Scopes};
 pub use shutdown::{Shutdowner, Signal};
+
+/// The async runtime `fx` is built on, re-exported so that an fx program does not need its
+/// own `tokio` dependency to have a `main`, spawn tasks or sleep. `#[fx::main]` runs on it.
+///
+/// Features other than `rt`, `rt-multi-thread`, `sync`, `time`, `signal` and `macros` (say
+/// `net` or `fs`) are enabled by depending on `tokio` yourself; Cargo unifies the features.
+pub use tokio;
 pub use value::BoxFuture;
 
 #[cfg(feature = "macros")]
-pub use rust_fx_macros::{Component, Params, bind, component, module};
+pub use rust_fx_macros::{Component, Params, bind, component, main, module, port};
 
 /// Support for macro-generated code. Not part of the public API.
 #[doc(hidden)]
 pub mod __private {
     pub use crate::bind::{Binding, Placement};
     pub use inventory;
+    pub use tokio;
 }
 
 /// Declares a unit struct that names values: `fx::tag!(Primary = "primary");`.
@@ -120,5 +130,5 @@ pub mod prelude {
         constructor, decorate, invoke,
     };
     #[cfg(feature = "macros")]
-    pub use rust_fx_macros::{Params, component, module};
+    pub use rust_fx_macros::{Params, component, module, port};
 }

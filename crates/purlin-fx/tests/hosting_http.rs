@@ -5,9 +5,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use purlin::hosting::{HttpServer, hosted, serve};
+use purlin::lifecycle;
 use purlin::prelude::*;
-use purlin::{fx, lifecycle};
+use purlin_fx::{HttpServer, hosted, serve};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 

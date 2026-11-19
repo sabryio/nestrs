@@ -1,26 +1,28 @@
-//! A queue-less worker: no HTTP, no controllers, only `purlin::fx`.
+//! A queue-less worker: no HTTP, no controllers, no purlin: only `rust-fx`.
 //!
 //! ```text
 //! cargo run -p headless-worker
 //! ```
 //!
 //! Shape: a port (`Clock`) bound to an adapter, a group of `Job`s, one invoke that drives
-//! them, and a graceful shutdown. Swap in `purlin-jobs`, `purlin-outbox` or
-//! `purlin-sea-orm` (all headless) the same way.
+//! them, and a graceful shutdown. To run purlin modules and an HTTP server in the same
+//! app, see `examples/purlin-on-fx`.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use purlin::fx::{self, App, Group, Lifecycle, Shutdowner};
+use fx::{App, Group, Lifecycle, Shutdowner};
 
 // ---- ports -----------------------------------------------------------------------
 
-trait Clock: Send + Sync {
+#[fx::port]
+trait Clock {
     fn tick(&self) -> u32;
 }
 
-trait Job: Send + Sync {
+#[fx::port]
+trait Job {
     fn name(&self) -> &'static str;
     fn run(&self, now: u32) -> String;
 }
@@ -68,7 +70,7 @@ impl Job for Cleanup {
 
 // ---- composition -----------------------------------------------------------------
 
-#[fx::module(providers = [CounterClock], exports = [dyn Clock])]
+#[fx::module(providers = [CounterClock], exports = [ClockPort])]
 struct TimeModule;
 
 #[fx::module(providers = [Cleanup])]
@@ -94,14 +96,14 @@ impl Journal {
 }
 
 /// Runs every job on a tick, `rounds` times, then asks the app to stop.
-fn drive(clock: Arc<dyn Clock>, jobs: Group<dyn Job>, journal: Arc<Journal>, life: Lifecycle, stop: Shutdowner) {
-    let handle = tokio::spawn(async move {
+fn drive(clock: Arc<ClockPort>, jobs: Group<JobPort>, journal: Arc<Journal>, life: Lifecycle, stop: Shutdowner) {
+    let handle = fx::tokio::spawn(async move {
         for _ in 0..3 {
             let now = clock.tick();
             for job in &jobs {
                 journal.record(format!("{} <- {}", job.name(), job.run(now)));
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            fx::tokio::time::sleep(Duration::from_millis(10)).await;
         }
         stop.shutdown_with(0);
     });
@@ -118,7 +120,7 @@ fn app(journal: Arc<Journal>) -> App {
         .invoke(drive)
 }
 
-#[tokio::main]
+#[fx::main]
 async fn main() -> fx::Result<()> {
     let code = app(Arc::default()).run().await?;
     std::process::exit(code);
@@ -158,7 +160,7 @@ mod tests {
         }
         let journal = Arc::new(Journal::default());
         app(journal.clone())
-            .replace::<dyn Clock>(Arc::new(Fixed))
+            .replace::<ClockPort>(Arc::new(Fixed))
             .run()
             .await
             .unwrap();

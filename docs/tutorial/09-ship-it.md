@@ -41,4 +41,5 @@ the outbox relay, the pool).
 
 * Add a feature with `purlin generate feature`, then replace its in-memory adapter with a database one behind the same port.
 * Add a use case, a controller and a port with `generate use-case|controller|port`.
+* Build a service with no web edge: [chapter 10](10-workers.md).
 * Read `RELEASING.md` before publishing crates.

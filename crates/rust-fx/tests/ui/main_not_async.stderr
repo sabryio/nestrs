@@ -1,0 +1,5 @@
+error: #[fx::main] needs an `async fn`: it starts the async runtime and runs the function on it
+ --> tests/ui/main_not_async.rs:3:1
+  |
+3 | fn main() {}
+  | ^^

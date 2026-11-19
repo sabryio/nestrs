@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use purlin::hosting::{Hosted, hosted};
-use purlin::{fx, injectable, lifecycle, module};
+use purlin::{injectable, lifecycle, module};
+use purlin_fx::{Hosted, hosted};
 
 static OPEN: AtomicBool = AtomicBool::new(false);
 
