@@ -50,6 +50,7 @@ impl Scopes {
         RequestScope {
             shared: self.shared.clone(),
             cache: Mutex::new(HashMap::new()),
+            undeclared: Mutex::new(HashMap::new()),
         }
     }
 
@@ -77,6 +78,9 @@ impl std::fmt::Debug for Scopes {
 pub struct RequestScope {
     shared: Arc<Shared>,
     cache: Mutex<HashMap<NodeId, Stored>>,
+    /// Seeds nothing declares. Visible only to a resolve of exactly that key: the planner never
+    /// saw them, so no other provider can depend on them.
+    undeclared: Mutex<HashMap<Key, Stored>>,
 }
 
 impl RequestScope {
@@ -99,19 +103,38 @@ impl RequestScope {
 
     /// Supplies the value of a [`Options::seeded`](crate::Options::seeded) provider.
     ///
+    /// A `T` that nothing declared is accepted too (a transport can seed what it likes), but only
+    /// [`resolve`](Self::resolve) of exactly `T` sees it; other providers cannot depend on it.
+    ///
     /// # Errors
     ///
-    /// If `T` is not declared, or is not request-scoped.
+    /// If `T` is declared but is not request-scoped.
     pub fn seed<T: ?Sized + Send + Sync + 'static>(&self, value: Arc<T>) -> Result<()> {
-        let key = Key::of::<T>();
-        let node = self.node(key, "RequestScope::seed")?;
-        if self.shared.plan.lifetime(node) != Lifetime::Request {
-            return Err(Error::internal(format!(
+        self.seed_erased(Key::of::<T>(), store(value))
+    }
+
+    /// [`seed`](Self::seed) with a runtime key and a type-erased value.
+    ///
+    /// # Errors
+    ///
+    /// As [`seed`](Self::seed).
+    pub fn seed_erased(&self, key: Key, value: Stored) -> Result<()> {
+        match self.shared.plan.root_view.get(&key).copied() {
+            Some(node) if self.shared.plan.lifetime(node) != Lifetime::Request => Err(Error::internal(format!(
                 "`{key}` is not request-scoped, so it cannot be seeded"
-            )));
+            ))),
+            Some(node) => {
+                self.lock().insert(node, value);
+                Ok(())
+            }
+            None => {
+                self.undeclared
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(key, value);
+                Ok(())
+            }
         }
-        self.lock().insert(node, store(value));
-        Ok(())
     }
 
     /// Resolves `T`: a singleton, this scope's instance, or a fresh transient one.
@@ -133,9 +156,21 @@ impl RequestScope {
     }
 
     async fn resolve_key<T: ?Sized + Send + Sync + 'static>(&self, key: Key) -> Result<Arc<T>> {
-        let node = self.node(key, "RequestScope::resolve")?;
-        let stored = self.resolve_node(node).await?;
+        let stored = self.resolve_erased(key).await?;
         load::<T>(&stored).ok_or_else(|| Error::internal(format!("`{key}` has an unexpected type")))
+    }
+
+    /// [`resolve`](Self::resolve) with a runtime key and a type-erased result.
+    ///
+    /// # Errors
+    ///
+    /// As [`resolve`](Self::resolve).
+    pub async fn resolve_erased(&self, key: Key) -> Result<Stored> {
+        if let Some(seed) = self.undeclared.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+            return Ok(seed.clone());
+        }
+        let node = self.node(key, "RequestScope::resolve")?;
+        self.resolve_node(node).await
     }
 
     fn resolve_node(&self, node: NodeId) -> BoxFuture<'_, Result<Stored>> {

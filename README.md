@@ -62,19 +62,20 @@ async fn main() -> Result<(), AppError> {
 }
 ```
 
-## Two independent frameworks: `fx` and `purlin`
+## Two layers: `fx` underneath, `purlin` on top
 
 | | Crates | What it is |
 |---|---|---|
-| **`fx`** | `rust-fx` (library `fx`), `rust-fx-macros` | dependency injection, modules with private scope, lifecycle hooks, graceful start/stop, `Shutdowner`, observers, a test harness. No web stack. |
-| **purlin** | `purlin`, `purlin-http`, `purlin-jobs`, `purlin-outbox`, `purlin-sea-orm`, ... | controllers, guards, interceptors, OpenAPI, request scopes, plus adapters for queues, outbox, databases, Redis, telemetry |
-| **`purlin-fx`** | `purlin-fx` | the adapter between them |
+| **`fx`** | `rust-fx` (library `fx`), `rust-fx-macros` | dependency injection, modules with private scope, request/transient scopes, lifecycle hooks, graceful start/stop, `Shutdowner`, observers, a test harness. No web stack. |
+| **purlin** | `purlin`, `purlin-core`, `purlin-http`, `purlin-jobs`, `purlin-outbox`, `purlin-sea-orm`, ... | purlin's module graph (visibility, exports, multi-bindings, overrides), controllers, guards, interceptors, OpenAPI, request scopes, plus adapters for queues, outbox, databases, Redis, telemetry |
+| **`purlin-fx`** | `purlin-fx` | hosts a purlin graph, and its HTTP server, as components inside an `fx::App` |
 
-**Neither framework knows the other.** `rust-fx` has no dependency on any `purlin` crate, and no
-`purlin` crate depends on `rust-fx` (`purlin` does not re-export `fx`). You can adopt, version and
-publish either alone. An application that wants both depends on both, plus `purlin-fx`, the only
-place where they meet. `scripts/check-headless.sh` (run in CI) fails if either side starts
-depending on the other.
+**The dependency points one way.** `purlin-core` runs its resolved module graph on `fx::App`:
+fx builds the providers, starts and stops their hooks in order, and opens request scopes. purlin
+keeps what is purlin's (module visibility, exports, multi-bindings, overrides, and the typed
+`DiError`s). `rust-fx` never depends on any `purlin` crate, and inside purlin only `purlin-core`
+names `rust-fx`. `scripts/check-headless.sh` (run in CI) enforces both. You can still adopt `fx`
+alone (`examples/headless-worker`, `examples/fx-axum`).
 
 ```toml
 [dependencies]
@@ -101,10 +102,9 @@ The HTTP adapter is a feature of the `purlin` facade (`http`, on by default); a 
 uses purlin's DI depends on `purlin = { default-features = false }` and gets no `axum`, `hyper`
 or `tower`. A worker that wants fx only (`examples/headless-worker`) needs no purlin at all.
 
-Status: purlin's own module system (`#[injectable]`, `#[module]`, request scopes) still runs on
-`purlin-core`, a second DI engine next to `fx`. Because the frameworks are independent,
-moving purlin onto `fx` would add a dependency between them; the plan is to do it only if you
-decide the duplication is worth that coupling.
+Status: singletons, init/destroy hooks, shutdown and request/transient scopes all run on `fx`
+(stages 11 and 12). What remains is `#[injectable]`/`#[module]` expanding straight to fx
+constructors; see `docs/design/unify-core-on-fx.md`.
 
 ## Smallest example
 

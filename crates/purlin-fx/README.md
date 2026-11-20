@@ -1,12 +1,11 @@
 # purlin-fx
 
-The adapter between two independent frameworks:
+Hosts a purlin module graph, and its HTTP server, inside an `fx::App`:
 
 - **rust-fx** (`fx`): dependency injection, modules, lifecycle, a graceful runtime.
-- **purlin**: modules, controllers, request scopes, HTTP.
-
-Neither depends on the other. This crate depends on both and is the only place they meet, so
-either can be adopted, versioned and published alone.
+- **purlin**: modules, controllers, request scopes, HTTP. Its core already runs on fx; this
+  crate makes the purlin graph one *component* of a larger fx app, sharing its lifecycle,
+  signals and shutdown path.
 
 ```rust
 fx::App::new()

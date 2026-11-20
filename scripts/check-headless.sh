@@ -44,25 +44,25 @@ for entry in "${CHECKS[@]}"; do
   fi
 done
 
-# The two frameworks must not know each other. Only the adapter (`purlin-fx`) and the
-# examples may depend on both.
-deps() { cargo tree -p "$1" -e normal --prefix none 2>/dev/null | awk '{print $1}' | sort -u; }
-
-fx_in_purlin=""
-for package in $(cargo metadata --no-deps --format-version 1 | python3 -c '
+# One-way dependency. purlin runs on rust-fx (purlin-core executes its module graph on `fx::App`),
+# so purlin -> fx is allowed; fx -> purlin never is. Within purlin, only `purlin-core` may name
+# rust-fx directly: everything above reaches it through purlin-core, so the engine can be
+# replaced in one place.
+direct_fx=$(cargo metadata --no-deps --format-version 1 | python3 -c '
 import json, sys
 for p in json.load(sys.stdin)["packages"]:
-    if p["name"].startswith("purlin") and p["name"] not in ("purlin-fx", "purlin-bench", "purlin-on-fx"):
-        print(p["name"])'); do
-  found=$(deps "$package" | grep -E '^rust-fx(-macros)?$' || true)
-  [ -n "$found" ] && fx_in_purlin="$fx_in_purlin $package"
-done
-if [ -n "$fx_in_purlin" ]; then
-  echo "FAIL  these purlin crates depend on rust-fx:$fx_in_purlin"; status=1
+    if p["name"].startswith("purlin") and p["name"] not in ("purlin-core", "purlin-fx", "purlin-on-fx", "purlin-bench"):
+        if any(d["name"] in ("rust-fx", "rust-fx-macros") and d.get("kind") in (None, "normal") for d in p["dependencies"]):
+            print(p["name"])')
+if [ -n "$direct_fx" ]; then
+  echo "FAIL  these purlin crates name rust-fx directly (go through purlin-core):" $direct_fx; status=1
 else
-  echo "ok    no purlin crate depends on rust-fx"
+  echo "ok    only purlin-core (and the adapter) name rust-fx directly"
 fi
 
+deps() { cargo tree -p "$1" -e normal --prefix none 2>/dev/null | awk '{print $1}' | sort -u; }
+
+# fx never knows purlin.
 for package in rust-fx rust-fx-macros headless-worker fx-axum; do
   found=$(deps "$package" | grep -E '^purlin' || true)
   if [ -n "$found" ]; then

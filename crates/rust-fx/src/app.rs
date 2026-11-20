@@ -333,6 +333,24 @@ impl App {
         self.get_by_key(Key::named::<T>(name)).await
     }
 
+    /// Like [`get`](Self::get), without a static type: the type-erased value for `key`.
+    /// For frameworks that hold their keys at runtime; see [`Provider::dynamic`](crate::Provider::dynamic).
+    ///
+    /// # Errors
+    ///
+    /// See [`get`](Self::get).
+    pub async fn get_erased(&mut self, key: Key) -> Result<Stored> {
+        let limit = self.start_timeout;
+        let runtime = self.runtime.as_mut().ok_or(Error::NotStarted)?;
+        match tokio::time::timeout(limit, runtime.fetch(key)).await {
+            Ok(stored) => stored,
+            Err(_) => Err(Error::Timeout {
+                phase: Phase::Start,
+                limit,
+            }),
+        }
+    }
+
     async fn get_by_key<T: ?Sized + Send + Sync + 'static>(&mut self, key: Key) -> Result<Arc<T>> {
         let limit = self.start_timeout;
         let runtime = self.runtime.as_mut().ok_or(Error::NotStarted)?;

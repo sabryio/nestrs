@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::bind::Bound;
 use crate::error::{BoxError, Result};
-use crate::extract::{Args, Context, DepKind, DepSpec};
+use crate::extract::{Args, Context, DepKind, DepSpec, Resolved};
 use crate::func::{Constructor, Invocation};
 use crate::key::{Key, Origin};
 use crate::lifecycle::HookOutcome;
@@ -233,6 +233,36 @@ impl Provider {
     /// How long its value lives.
     pub fn lifetime(&self) -> Lifetime {
         self.lifetime
+    }
+
+    /// A provider described at runtime: for layers that translate their own registry onto fx
+    /// (see the `purlin-core` facade). `build` receives the arguments resolved from `specs`, in
+    /// order, and the [`Context`] (where lifecycle hooks are registered).
+    ///
+    /// Prefer [`constructor`](crate::constructor) in application code; this is the escape hatch
+    /// when types are only known at runtime.
+    #[track_caller]
+    pub fn dynamic<F>(key: Key, specs: Vec<DepSpec>, origin: &'static str, lifetime: Lifetime, build: F) -> Self
+    where
+        F: Fn(Vec<Resolved>, &Context) -> BoxFuture<'static, std::result::Result<Stored, BoxError>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let location = Location::caller();
+        Self {
+            key,
+            specs,
+            build: Arc::new(move |args, ctx| {
+                let mut resolved = Vec::new();
+                while let Ok(item) = args.take() {
+                    resolved.push(item);
+                }
+                Ok(build(resolved, ctx))
+            }),
+            origin: Origin::new(origin, location),
+            lifetime,
+        }
     }
 
     /// A request-scoped `T` that the transport supplies for every scope with

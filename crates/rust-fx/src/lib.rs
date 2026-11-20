@@ -87,6 +87,7 @@ pub use observer::{Event, Observer, Silent, Tracing};
 pub use options::Options;
 pub use scope::{RequestScope, Scopes};
 pub use shutdown::{Shutdowner, Signal};
+pub use value::{Stored, load, store};
 
 /// The async runtime `fx` is built on, re-exported so that an fx program does not need its
 /// own `tokio` dependency to have a `main`, spawn tasks or sleep. `#[fx::main]` runs on it.

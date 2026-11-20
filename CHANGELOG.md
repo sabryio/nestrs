@@ -122,3 +122,19 @@ First feature-complete version.
 - rust-fx: `fx::tokio` re-exports the async runtime; `#[fx::main]` is `#[tokio::main]` through that re-export (same options, `crate = ..` reserved), so programs need no direct `tokio` dependency to have a `main`. The macro goes through the same parse/analyze/IR/generate pipeline and reports non-async, argument-taking and `crate =` misuse together. `rust-fx` now enables tokio's `rt-multi-thread` feature. `headless-worker` no longer lists tokio as a normal dependency.
 
 - rust-fx: `App::eager()` builds every singleton at start instead of only what invokes reach. `tests/ordering.rs` pins start/stop ordering and failure handling (the guarantees purlin-core's bootstrap relies on).
+
+## Unreleased (stage 11a)
+
+- rust-fx: the seam for layering a framework on fx: `Provider::dynamic` (a provider described at runtime: key, dependency specs, build closure, lifetime), `Key::from_parts` / `Key::type_id`, and public `Stored` / `store` / `load`. `purlin-core` will use it to translate its registry onto `fx::App`.
+
+## Unreleased (stage 11b/c: purlin runs on fx)
+
+- **purlin-core now depends on rust-fx** (the one allowed edge; rust-fx never depends on purlin). `bootstrap` executes the resolved plan on `fx::App::eager()` via `fx::Provider::dynamic`: construction, init/destroy hooks, failure unwinding and shutdown are fx's. The old build loop is removed.
+- rust-fx: `App::get_erased(Key)`.
+- **Breaking (purlin-core)**: `Shutdown::len()` / `is_empty()` removed; `Shutdown::run` no longer reads its container argument (still accepted).
+- `scripts/check-headless.sh`: replaces "no purlin crate depends on rust-fx" with "only purlin-core (and the adapter) name rust-fx directly", and keeps "rust-fx / fx-axum / headless-worker do not know purlin". Docs (README, purlin-fx) reworded to match.
+
+## Unreleased (stage 12: request scopes on fx)
+
+- purlin-core: `RequestScope` and `ScopedProviders` run on `fx::Scopes` / `fx::RequestScope`; `Lifetime` is now `fx::Lifetime` (same variants and text). Request-scoped and transient providers are registered with fx like singletons. `RequestScope::new` still takes the container (ignored).
+- rust-fx: `RequestScope::resolve_erased` / `seed_erased`; seeding a type nothing declared is allowed (only an exact `resolve` of it sees it).

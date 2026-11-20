@@ -118,3 +118,15 @@ async fn seeding_something_that_is_not_request_scoped_is_an_error() {
     assert!(scopes.open().seed(Arc::new(Pool)).is_err());
     assert_eq!(fx::Provider::from(constructor(pool)).lifetime(), Lifetime::Singleton);
 }
+
+#[tokio::test]
+async fn an_undeclared_seed_is_resolvable_but_not_injectable() {
+    let (_app, scopes) = started(Options::new()).await;
+    let scope = scopes.open();
+    scope.seed(Arc::new(Ticket(9))).unwrap();
+    assert_eq!(scope.resolve::<Ticket>().await.unwrap().0, 9);
+    assert!(
+        scopes.open().resolve::<Ticket>().await.is_err(),
+        "seeds belong to one scope"
+    );
+}

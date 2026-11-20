@@ -13,7 +13,7 @@ use std::panic::Location;
 pub struct Key {
     id: TypeId,
     /// `std::any::type_name::<T>`, as a pointer so the key stays small.
-    ty: fn() -> &'static str,
+    ty: TypeText,
     name: Option<&'static str>,
     group: bool,
 }
@@ -36,7 +36,7 @@ impl Key {
     fn build<T: ?Sized + 'static>(name: Option<&'static str>, group: bool) -> Self {
         Self {
             id: TypeId::of::<T>(),
-            ty: std::any::type_name::<T>,
+            ty: TypeText::Of(std::any::type_name::<T>),
             name,
             group,
         }
@@ -49,7 +49,7 @@ impl Key {
 
     /// Fully qualified type name, as reported by [`std::any::type_name`].
     pub fn type_name(&self) -> &'static str {
-        (self.ty)()
+        self.ty.get()
     }
 
     /// The name this value is registered under, if any.
@@ -60,6 +60,40 @@ impl Key {
     /// Whether this key stands for a group of values.
     pub fn is_group(&self) -> bool {
         self.group
+    }
+}
+
+/// The type name, either computed lazily from a type or supplied as text.
+#[derive(Clone, Copy)]
+enum TypeText {
+    Of(fn() -> &'static str),
+    Fixed(&'static str),
+}
+
+impl TypeText {
+    fn get(self) -> &'static str {
+        match self {
+            Self::Of(name) => name(),
+            Self::Fixed(text) => text,
+        }
+    }
+}
+
+impl Key {
+    /// A key from its parts, for layers that hold type information at runtime (a framework
+    /// translating its own registry onto fx). `type_name` is used only in messages.
+    pub fn from_parts(id: TypeId, type_name: &'static str, name: Option<&'static str>, group: bool) -> Self {
+        Self {
+            id,
+            ty: TypeText::Fixed(type_name),
+            name,
+            group,
+        }
+    }
+
+    /// The [`TypeId`] of the provided type.
+    pub fn type_id(&self) -> TypeId {
+        self.id
     }
 }
 
@@ -84,7 +118,7 @@ impl fmt::Display for Key {
         if self.group {
             f.write_str("group of ")?;
         }
-        f.write_str(&shorten((self.ty)()))?;
+        f.write_str(&shorten(self.ty.get()))?;
         if let Some(name) = self.name {
             write!(f, " (name \"{name}\")")?;
         }

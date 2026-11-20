@@ -7,10 +7,9 @@
 
 use std::future::Future;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::provider::BoxFuture;
-use crate::{Container, DiError, Token};
+use crate::{Container, DiError};
 
 /// Implemented by providers that need to do async work once the whole graph exists
 /// (warm a cache, run migrations, seed data).
@@ -35,54 +34,37 @@ pub(crate) type Hook = Arc<dyn for<'a> Fn(&'a Container) -> BoxFuture<'a, Result
 
 /// The shutdown half of the lifecycle, produced by bootstrap.
 ///
-/// Runs each destroy hook once, in reverse build order. A failing hook does not
-/// stop the others: every error is collected and returned. Calling [`run`](Self::run)
-/// again is a no-op, so shutdown is safe to trigger from several places.
+/// Stops the running `fx` app: destroy hooks run once, in reverse build order. A failing hook
+/// does not stop the others: every error is collected and returned. Calling
+/// [`run`](Self::run) again is a no-op, so shutdown is safe to trigger from several places.
 pub struct Shutdown {
-    /// Already in execution order (last built first).
-    hooks: Vec<(Token, Hook)>,
-    done: AtomicBool,
+    app: fx::tokio::sync::Mutex<Option<fx::App>>,
 }
 
 impl Shutdown {
-    pub(crate) fn new(hooks: Vec<(Token, Hook)>) -> Self {
+    pub(crate) fn on_fx(app: fx::App) -> Self {
         Self {
-            hooks,
-            done: AtomicBool::new(false),
+            app: fx::tokio::sync::Mutex::new(Some(app)),
         }
     }
 
-    /// Runs the destroy hooks against `container`, returning every error.
-    pub async fn run(&self, container: &Container) -> Vec<DiError> {
-        if self.done.swap(true, Ordering::SeqCst) {
+    /// Runs the destroy hooks (once) and returns every error.
+    ///
+    /// The container argument is not needed any more (each hook already holds its value); it
+    /// stays so that existing callers keep compiling.
+    pub async fn run(&self, _container: &Container) -> Vec<DiError> {
+        let Some(mut app) = self.app.lock().await.take() else {
             return Vec::new();
+        };
+        match app.stop().await {
+            Ok(()) => Vec::new(),
+            Err(error) => crate::engine::stop_errors(error),
         }
-        let mut errors = Vec::new();
-        for (token, hook) in &self.hooks {
-            if let Err(error) = hook(container).await {
-                errors.push(DiError::Hook {
-                    provider: *token,
-                    phase: "destroy",
-                    message: error.to_string(),
-                });
-            }
-        }
-        errors
-    }
-
-    /// How many destroy hooks are registered.
-    pub fn len(&self) -> usize {
-        self.hooks.len()
-    }
-
-    /// Whether there is nothing to run at shutdown.
-    pub fn is_empty(&self) -> bool {
-        self.hooks.is_empty()
     }
 }
 
 impl std::fmt::Debug for Shutdown {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Shutdown").field("hooks", &self.hooks.len()).finish()
+        f.write_str("Shutdown")
     }
 }

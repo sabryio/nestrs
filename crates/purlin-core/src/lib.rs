@@ -23,6 +23,7 @@
 mod bootstrap;
 mod container;
 mod dependency;
+mod engine;
 mod error;
 mod graph;
 mod lifecycle;

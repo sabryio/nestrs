@@ -14,6 +14,9 @@ readme = "README.md"
 
 [dependencies]
 thiserror.workspace = true
+# The one place purlin depends on rust-fx: the execution engine (building, lifecycle hooks,
+# shutdown). See docs/design/unify-core-on-fx.md. rust-fx never depends on purlin.
+rust-fx.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

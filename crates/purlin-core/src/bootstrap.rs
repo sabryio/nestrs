@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use crate::graph::Plan;
-use crate::lifecycle::Hook;
 use crate::transport::MountedController;
-use crate::{Container, DiError, Lifetime, Module, ModuleRef, Overrides, ScopedProviders, Shutdown, Token};
+use crate::{Container, DiError, Module, ModuleRef, Overrides, ScopedProviders, Shutdown, Token};
 
 /// The result of a successful bootstrap.
 #[derive(Debug)]
@@ -33,57 +32,10 @@ pub async fn bootstrap<M: Module>() -> Result<Bootstrapped, DiError> {
 pub async fn bootstrap_with<M: Module>(overrides: Overrides) -> Result<Bootstrapped, DiError> {
     let plan = Plan::resolve(ModuleRef::of::<M>(), overrides)?;
 
-    let mut container = Container::new();
-    for &index in &plan.order {
-        let provider = &plan.providers[index].provider;
-        if provider.lifetime() != Lifetime::Singleton {
-            continue;
-        }
-        let built = provider
-            .build(&container)
-            .await
-            .map_err(|error| attribute(provider.token(), error))?;
-        container.insert_raw(provider.token(), built);
-    }
-
-    // Init hooks run once everything exists, dependencies first. A provider's
-    // destroy hooks are registered only after its init succeeded, so a failed start
-    // tears down exactly what had started.
-    let mut destroy: Vec<(Token, Hook)> = Vec::new();
-    for &index in &plan.order {
-        let provider = &plan.providers[index].provider;
-        if provider.lifetime() != Lifetime::Singleton {
-            continue;
-        }
-        for hook in provider.init_hooks() {
-            if let Err(error) = hook(&container).await {
-                destroy.reverse();
-                // Teardown is best effort here: the init failure is the error to report.
-                let _ = Shutdown::new(destroy).run(&container).await;
-                return Err(DiError::Hook {
-                    provider: provider.token(),
-                    phase: "init",
-                    message: error.to_string(),
-                });
-            }
-        }
-        destroy.extend(
-            provider
-                .destroy_hooks()
-                .iter()
-                .map(|hook| (provider.token(), Arc::clone(hook))),
-        );
-    }
-    destroy.reverse();
+    let (container, shutdown, scopes) = crate::engine::start(&plan).await?;
 
     let modules = plan.modules.iter().map(|module| module.name).collect();
-    let scoped = ScopedProviders::new(
-        plan.providers
-            .iter()
-            .filter(|node| node.provider.lifetime() != Lifetime::Singleton)
-            .map(|node| (node.provider.token(), node.provider.clone()))
-            .collect(),
-    );
+    let scoped = ScopedProviders::new(scopes);
     let container = Arc::new(container);
     let mut controllers = Vec::new();
     for node in plan.providers {
@@ -99,7 +51,7 @@ pub async fn bootstrap_with<M: Module>(overrides: Overrides) -> Result<Bootstrap
         scoped: Arc::new(scoped),
         controllers,
         modules,
-        shutdown: Shutdown::new(destroy),
+        shutdown,
     })
 }
 

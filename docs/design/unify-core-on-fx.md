@@ -1,6 +1,6 @@
 # Unifying `purlin-core` on `fx`
 
-Status: **in progress** (stages 9 and 10 done). Decision recorded 2026-11-19.
+Status: **in progress** (stages 9-12 done; the macros still expand to purlin-core providers). Decision recorded 2026-11-19.
 
 ## Decision and exception
 
@@ -32,8 +32,8 @@ fx's planner, scopes, lifecycle and tests. Two engines mean two sets of bugs.
 
 1. **Stage 9 (this one)**: fill the fx gaps that are pure engine features: global modules, configured instances. No purlin behaviour changes.
 2. **Stage 10 (done)**: request/transient lifetimes in fx, with the no-singleton-depends-on-scoped check. Limits: scoped values resolve by root-visible key; hooks on scoped constructors do not run.
-3. **Stage 11**: `purlin-core` becomes a facade: `Provider`/`Module`/`Overrides` build fx `Options`; `bootstrap` calls `fx::App`. Public API unchanged, existing tests stay green.
-4. **Stage 12**: `#[injectable]`/`#[module]` expand directly to fx constructors; delete the old graph/container; retire the `purlin-fx` adapter.
+3. **Stage 11 (done)**: the boundary is drawn where each side is strongest. purlin keeps declaration and validation (module graph, visibility, exports, multi-bindings, overrides, typed `DiError`s in `graph.rs`). `bootstrap` hands the *resolved, ordered singleton list* to `fx::App::eager()` through `fx::Provider::dynamic`; fx builds, runs init hooks once everything exists, and stops in reverse. The built-in build loop and hook runner are deleted. All 614 workspace tests pass unchanged. Differences a user can see: `Shutdown::len`/`is_empty` are gone (the hooks live in fx now), and `Shutdown::run` ignores its container argument (kept for source compatibility).
+4. **Stage 12 (done)**: request/transient resolution runs on `fx::Scopes` (`ScopedProviders` wraps it, `RequestScope` wraps `fx::RequestScope`, `Lifetime` is `fx::Lifetime`). Undeclared seeds are still accepted. Next (stage 13): `#[injectable]`/`#[module]` expand directly to fx constructors; delete the old graph/container; retire the `purlin-fx` adapter.
 5. **Stage 13**: update independence checks, README, CHANGELOG, tutorial 10.
 
 Each stage must keep the workspace green (fmt, clippy `--all-features`, tests, `check-headless.sh`).
